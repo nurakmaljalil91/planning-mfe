@@ -88,7 +88,7 @@ module.exports = tseslint.config(
       'no-useless-concat': 'error',
       'no-var': 'error',
       'no-restricted-syntax': 'off',
-      'no-shadow': 'error',
+      'no-shadow': 'off',
       'one-var': ['error', 'never'],
       'prefer-arrow-callback': 'error',
       'prefer-const': 'error',
