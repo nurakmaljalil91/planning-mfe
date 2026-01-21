@@ -1,7 +1,7 @@
 import { CommonModule } from '@angular/common';
 import { Component } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { CxsButtonComponent } from 'cerxos-ui';
+import { CxsButtonComponent, CxsDialogComponent } from 'cerxos-ui';
 
 import { CalendarItem, CalendarItemType, createMockCalendarItems } from './calendar.mock';
 
@@ -23,7 +23,7 @@ interface DraftItem {
 
 @Component({
   selector: 'app-calendar',
-  imports: [CommonModule, FormsModule, CxsButtonComponent],
+  imports: [CommonModule, FormsModule, CxsButtonComponent, CxsDialogComponent],
   templateUrl: './calendar.component.html',
   styleUrl: './calendar.component.css'
 })
