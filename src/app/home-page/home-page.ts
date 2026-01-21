@@ -1,10 +1,10 @@
 import { Component } from '@angular/core';
-import { CxsButtonComponent } from 'cerxos-ui';
+import { CalendarComponent } from '../calendar/calendar.component';
 
 @Component({
   selector: 'app-home-page',
   imports: [
-    CxsButtonComponent
+    CalendarComponent
   ],
   templateUrl: './home-page.html',
   styleUrl: './home-page.css',

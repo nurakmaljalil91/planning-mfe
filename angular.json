@@ -71,6 +71,9 @@
             "styles": [
               "src/styles.css"
             ],
+            "conditions": [
+              "style"
+            ],
             "polyfills": [
               "es-module-shims"
             ]
