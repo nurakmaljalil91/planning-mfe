@@ -183,6 +183,10 @@ export class CalendarComponent {
     return `${start} - ${this.formatTime(item.end)}`;
   }
 
+  isToday(date: Date): boolean {
+    return this.isSameDay(date, new Date());
+  }
+
   trackByDate(_index: number, day: CalendarDay): number {
     return day.date.getTime();
   }
