@@ -3,7 +3,7 @@ import { TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 
 import { environment } from '../../../environments/environment';
-import { CalendarDto, BaseResponse, PaginatedResult } from '../models/planner.models';
+import { CalendarDto, CalendarSubscriptionDto, BaseResponse, PaginatedResult } from '../models/planner.models';
 import { CalendarService } from './calendar.service';
 
 const BASE_URL = `${environment.apiBaseUrl}/api/calendars`;
@@ -14,10 +14,20 @@ const mockCalendar: CalendarDto = {
   description: null,
   timeZone: 'UTC',
   isPrimary: true,
+  isPublic: false,
+  isVisible: true,
   isGoogleCalendar: false,
   userId: 'user-1',
   events: [],
   tasks: []
+};
+
+const mockSubscription: CalendarSubscriptionDto = {
+  id: 10,
+  userId: 'user-1',
+  calendarId: 5,
+  isVisible: true,
+  calendar: null
 };
 
 const makePaginatedResponse = <T>(items: T[]): BaseResponse<PaginatedResult<T>> => ({
@@ -138,6 +148,93 @@ describe('CalendarService', () => {
       req.flush(makeSingleResponse(null));
 
       expect(completed).toBe(true);
+    });
+  });
+
+  describe('getPublicCalendars', () => {
+    it('should GET /api/calendars/public and return paginated result', () => {
+      let result: PaginatedResult<CalendarDto> | undefined;
+
+      service.getPublicCalendars({ page: 1, total: 50 }).subscribe((r) => (result = r));
+
+      const req = httpController.expectOne(
+        (r) => r.url === `${BASE_URL}/public` && r.params.get('page') === '1'
+      );
+      expect(req.request.method).toBe('GET');
+      req.flush(makePaginatedResponse([{ ...mockCalendar, isPublic: true }]));
+
+      expect(result?.items[0].isPublic).toBe(true);
+    });
+  });
+
+  describe('getUserSubscriptions', () => {
+    it('should GET /api/calendars/subscriptions and return array', () => {
+      let result: CalendarSubscriptionDto[] | undefined;
+
+      service.getUserSubscriptions().subscribe((r) => (result = r));
+
+      const req = httpController.expectOne(`${BASE_URL}/subscriptions`);
+      expect(req.request.method).toBe('GET');
+      req.flush(makeSingleResponse([mockSubscription]));
+
+      expect(result?.length).toBe(1);
+      expect(result?.[0].calendarId).toBe(5);
+    });
+  });
+
+  describe('subscribeToCalendar', () => {
+    it('should POST /api/calendars/{id}/subscribe and return subscription', () => {
+      let result: CalendarSubscriptionDto | undefined;
+
+      service.subscribeToCalendar(5).subscribe((r) => (result = r));
+
+      const req = httpController.expectOne(`${BASE_URL}/5/subscribe`);
+      expect(req.request.method).toBe('POST');
+      req.flush(makeSingleResponse(mockSubscription));
+
+      expect(result?.calendarId).toBe(5);
+    });
+  });
+
+  describe('unsubscribeFromCalendar', () => {
+    it('should DELETE /api/calendars/{id}/subscribe', () => {
+      let completed = false;
+
+      service.unsubscribeFromCalendar(5).subscribe({ complete: () => (completed = true) });
+
+      const req = httpController.expectOne(`${BASE_URL}/5/subscribe`);
+      expect(req.request.method).toBe('DELETE');
+      req.flush(makeSingleResponse(null));
+
+      expect(completed).toBe(true);
+    });
+  });
+
+  describe('toggleCalendarVisibility', () => {
+    it('should PATCH /api/calendars/{id}/visibility and return updated calendar', () => {
+      let result: CalendarDto | undefined;
+
+      service.toggleCalendarVisibility(1).subscribe((r) => (result = r));
+
+      const req = httpController.expectOne(`${BASE_URL}/1/visibility`);
+      expect(req.request.method).toBe('PATCH');
+      req.flush(makeSingleResponse({ ...mockCalendar, isVisible: false }));
+
+      expect(result?.isVisible).toBe(false);
+    });
+  });
+
+  describe('toggleSubscriptionVisibility', () => {
+    it('should PATCH /api/calendars/subscriptions/{id}/visibility and return updated subscription', () => {
+      let result: CalendarSubscriptionDto | undefined;
+
+      service.toggleSubscriptionVisibility(5).subscribe((r) => (result = r));
+
+      const req = httpController.expectOne(`${BASE_URL}/subscriptions/5/visibility`);
+      expect(req.request.method).toBe('PATCH');
+      req.flush(makeSingleResponse({ ...mockSubscription, isVisible: false }));
+
+      expect(result?.isVisible).toBe(false);
     });
   });
 });

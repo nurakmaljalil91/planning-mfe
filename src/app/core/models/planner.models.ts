@@ -68,10 +68,20 @@ export interface CalendarDto {
   description: string | null;
   timeZone: string | null;
   isPrimary: boolean;
+  isPublic: boolean;
+  isVisible: boolean;
   isGoogleCalendar: boolean;
   userId: string;
   events: EventDto[];
   tasks: PlannerTaskDto[];
+}
+
+export interface CalendarSubscriptionDto {
+  id: number;
+  userId: string;
+  calendarId: number;
+  isVisible: boolean;
+  calendar: CalendarDto | null;
 }
 
 export interface CreateEventDto {
@@ -115,6 +125,13 @@ export interface UpdatePlannerTaskDto {
 }
 
 export interface CreateCalendarDto {
+  title: string;
+  description?: string | null;
+  timeZone?: string | null;
+  isPrimary?: boolean;
+}
+
+export interface CreatePublicCalendarDto {
   title: string;
   description?: string | null;
   timeZone?: string | null;

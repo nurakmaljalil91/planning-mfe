@@ -13,8 +13,17 @@ import { forkJoin } from 'rxjs';
 import { CalendarService } from '../core/services/calendar.service';
 import { EventService } from '../core/services/event.service';
 import { PlannerTaskService } from '../core/services/planner-task.service';
-import { CreateEventDto, CreatePlannerTaskDto, EventDto, PlannerTaskDto, ReminderDto } from '../core/models/planner.models';
+import {
+  CalendarDto,
+  CalendarSubscriptionDto,
+  CreateEventDto,
+  CreatePlannerTaskDto,
+  EventDto,
+  PlannerTaskDto,
+  ReminderDto
+} from '../core/models/planner.models';
 import { CalendarItem, CalendarItemType } from './calendar.mock';
+import { CalendarSidebarComponent } from './calendar-sidebar/calendar-sidebar.component';
 
 type CalendarView = 'month' | 'week' | 'day';
 
@@ -34,7 +43,7 @@ interface DraftItem {
 
 @Component({
   selector: 'app-calendar',
-  imports: [CommonModule, FormsModule, CxsButtonComponent, CxsDialogComponent],
+  imports: [CommonModule, FormsModule, CxsButtonComponent, CxsDialogComponent, CalendarSidebarComponent],
   templateUrl: './calendar.component.html',
   styleUrl: './calendar.component.css',
   changeDetection: ChangeDetectionStrategy.OnPush
@@ -47,6 +56,10 @@ export class CalendarComponent implements OnInit {
   readonly isLoading = signal(false);
   readonly error = signal<string | null>(null);
   readonly primaryCalendarId = signal<number | null>(null);
+
+  readonly ownCalendars = signal<CalendarDto[]>([]);
+  readonly subscriptions = signal<CalendarSubscriptionDto[]>([]);
+  readonly publicCalendars = signal<CalendarDto[]>([]);
 
   viewMode: CalendarView = 'month';
   currentDate = this.startOfDay(new Date());
@@ -203,7 +216,6 @@ export class CalendarComponent implements OnInit {
         }
       });
     } else {
-      // reminder — optimistic local insert until reminder API is wired
       this.items.update((current) => [
         ...current,
         {
@@ -222,13 +234,66 @@ export class CalendarComponent implements OnInit {
   }
 
   itemsForDate(date: Date): CalendarItem[] {
-    return this.items().filter((item) => this.isSameDay(item.start, date));
+    const visible = this.visibleCalendarIds;
+    return this.items().filter(
+      (item) =>
+        this.isSameDay(item.start, date) &&
+        (item.calendarId == null || visible.has(item.calendarId))
+    );
   }
 
   itemsForHour(date: Date, hour: number): CalendarItem[] {
+    const visible = this.visibleCalendarIds;
     return this.items().filter(
-      (item) => this.isSameDay(item.start, date) && item.start.getHours() === hour
+      (item) =>
+        this.isSameDay(item.start, date) &&
+        item.start.getHours() === hour &&
+        (item.calendarId == null || visible.has(item.calendarId))
     );
+  }
+
+  onVisibilityToggled(event: { type: 'own' | 'subscription'; calendarId: number }): void {
+    if (event.type === 'own') {
+      this.calendarService.toggleCalendarVisibility(event.calendarId).subscribe({
+        next: (updated) => {
+          this.ownCalendars.update((cals) =>
+            cals.map((c) => (c.id === updated.id ? updated : c))
+          );
+        }
+      });
+    } else {
+      this.calendarService.toggleSubscriptionVisibility(event.calendarId).subscribe({
+        next: (updated) => {
+          this.subscriptions.update((subs) =>
+            subs.map((s) => (s.calendarId === updated.calendarId ? updated : s))
+          );
+        }
+      });
+    }
+  }
+
+  onCalendarCreated(title: string): void {
+    this.calendarService.createCalendar({ title }).subscribe({
+      next: (created) => {
+        this.ownCalendars.update((cals) => [...cals, created]);
+      }
+    });
+  }
+
+  onSubscribed(calendarId: number): void {
+    this.calendarService.subscribeToCalendar(calendarId).subscribe({
+      next: (sub) => {
+        this.subscriptions.update((subs) => [...subs, sub]);
+      }
+    });
+  }
+
+  onUnsubscribed(calendarId: number): void {
+    this.calendarService.unsubscribeFromCalendar(calendarId).subscribe({
+      next: () => {
+        this.subscriptions.update((subs) => subs.filter((s) => s.calendarId !== calendarId));
+      }
+    });
   }
 
   formatHour(hour: number): string {
@@ -257,13 +322,31 @@ export class CalendarComponent implements OnInit {
     return item.id;
   }
 
+  private get visibleCalendarIds(): Set<number> {
+    const ownIds = this.ownCalendars()
+      .filter((c) => c.isVisible)
+      .map((c) => c.id);
+    const subIds = this.subscriptions()
+      .filter((s) => s.isVisible)
+      .map((s) => s.calendarId);
+    return new Set([...ownIds, ...subIds]);
+  }
+
   private loadData(): void {
     this.isLoading.set(true);
     this.error.set(null);
 
-    this.calendarService.getCalendars({ page: 1, total: 10 }).subscribe({
-      next: (result) => {
-        const primary = result.items.find((c) => c.isPrimary) ?? result.items[0];
+    forkJoin({
+      calendars: this.calendarService.getCalendars({ page: 1, total: 50 }),
+      subscriptions: this.calendarService.getUserSubscriptions(),
+      publicCals: this.calendarService.getPublicCalendars({ page: 1, total: 50 })
+    }).subscribe({
+      next: ({ calendars, subscriptions, publicCals }) => {
+        this.ownCalendars.set(calendars.items);
+        this.subscriptions.set(subscriptions);
+        this.publicCalendars.set(publicCals.items);
+
+        const primary = calendars.items.find((c) => c.isPrimary) ?? calendars.items[0];
         if (primary) {
           this.primaryCalendarId.set(primary.id);
           this.loadCalendarItems();
@@ -271,6 +354,7 @@ export class CalendarComponent implements OnInit {
           this.calendarService.createCalendar({ title: 'My Calendar', isPrimary: true }).subscribe({
             next: (created) => {
               this.primaryCalendarId.set(created.id);
+              this.ownCalendars.update((cals) => [...cals, created]);
               this.loadCalendarItems();
             },
             error: (err: unknown) => {
@@ -316,7 +400,8 @@ export class CalendarComponent implements OnInit {
       start: new Date(event.startTime),
       end: new Date(event.endTime),
       location: event.location ?? undefined,
-      notes: event.description ?? undefined
+      notes: event.description ?? undefined,
+      calendarId: event.calendarId
     };
   }
 
@@ -328,7 +413,8 @@ export class CalendarComponent implements OnInit {
       title: task.title,
       type: 'task',
       start,
-      notes: task.note ?? undefined
+      notes: task.note ?? undefined,
+      calendarId: task.calendarId
     };
   }
 

@@ -8,6 +8,7 @@ export interface CalendarItem {
   end?: Date;
   location?: string;
   notes?: string;
+  calendarId?: number;
 }
 
 const atTime = (base: Date, hour: number, minute = 0): Date =>
