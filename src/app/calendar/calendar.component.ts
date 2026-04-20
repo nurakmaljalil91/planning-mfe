@@ -1,9 +1,20 @@
 import { CommonModule } from '@angular/common';
-import { Component } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  OnInit,
+  inject,
+  signal
+} from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { CxsButtonComponent, CxsDialogComponent } from 'cerxos-ui';
+import { forkJoin } from 'rxjs';
 
-import { CalendarItem, CalendarItemType, createMockCalendarItems } from './calendar.mock';
+import { CalendarService } from '../core/services/calendar.service';
+import { EventService } from '../core/services/event.service';
+import { PlannerTaskService } from '../core/services/planner-task.service';
+import { CreateEventDto, CreatePlannerTaskDto, EventDto, PlannerTaskDto, ReminderDto } from '../core/models/planner.models';
+import { CalendarItem, CalendarItemType } from './calendar.mock';
 
 type CalendarView = 'month' | 'week' | 'day';
 
@@ -25,18 +36,31 @@ interface DraftItem {
   selector: 'app-calendar',
   imports: [CommonModule, FormsModule, CxsButtonComponent, CxsDialogComponent],
   templateUrl: './calendar.component.html',
-  styleUrl: './calendar.component.css'
+  styleUrl: './calendar.component.css',
+  changeDetection: ChangeDetectionStrategy.OnPush
 })
-export class CalendarComponent {
+export class CalendarComponent implements OnInit {
+  private readonly calendarService = inject(CalendarService);
+  private readonly eventService = inject(EventService);
+  private readonly taskService = inject(PlannerTaskService);
+
+  readonly isLoading = signal(false);
+  readonly error = signal<string | null>(null);
+  readonly primaryCalendarId = signal<number | null>(null);
+
   viewMode: CalendarView = 'month';
   currentDate = this.startOfDay(new Date());
   selectedDate = this.startOfDay(new Date());
-  items: CalendarItem[] = createMockCalendarItems(this.currentDate);
+  items = signal<CalendarItem[]>([]);
   isComposerOpen = false;
   draft: DraftItem = this.buildDraft(this.selectedDate);
 
   readonly weekDays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
   readonly hours = Array.from({ length: 13 }, (_, index) => index + 7);
+
+  ngOnInit(): void {
+    this.loadData();
+  }
 
   get viewLabel(): string {
     if (this.viewMode === 'month') {
@@ -141,18 +165,56 @@ export class CalendarComponent {
     const start = this.combineDateAndTime(this.draft.date, this.draft.startTime);
     const end = this.combineDateAndTime(this.draft.date, this.draft.endTime);
 
-    this.items = [
-      ...this.items,
-      {
-        id: `custom-${Date.now()}`,
+    if (this.draft.type === 'event') {
+      const dto: CreateEventDto = {
+        calendarId: this.primaryCalendarId() ?? 0,
         title: this.draft.title.trim(),
-        type: this.draft.type,
-        start,
-        end: this.draft.type === 'event' ? end : undefined
-      }
-    ];
-
-    this.isComposerOpen = false;
+        startTime: start.toISOString(),
+        endTime: end.toISOString()
+      };
+      this.isLoading.set(true);
+      this.eventService.createEvent(dto).subscribe({
+        next: (created) => {
+          this.items.update((current) => [...current, this.mapEventToCalendarItem(created)]);
+          this.isComposerOpen = false;
+          this.isLoading.set(false);
+        },
+        error: (err: unknown) => {
+          this.error.set(err instanceof Error ? err.message : 'Failed to save event');
+          this.isLoading.set(false);
+        }
+      });
+    } else if (this.draft.type === 'task') {
+      const dto: CreatePlannerTaskDto = {
+        calendarId: this.primaryCalendarId() ?? 0,
+        title: this.draft.title.trim(),
+        dueDate: start.toISOString()
+      };
+      this.isLoading.set(true);
+      this.taskService.createTask(dto).subscribe({
+        next: (created) => {
+          this.items.update((current) => [...current, this.mapTaskToCalendarItem(created)]);
+          this.isComposerOpen = false;
+          this.isLoading.set(false);
+        },
+        error: (err: unknown) => {
+          this.error.set(err instanceof Error ? err.message : 'Failed to save task');
+          this.isLoading.set(false);
+        }
+      });
+    } else {
+      // reminder — optimistic local insert until reminder API is wired
+      this.items.update((current) => [
+        ...current,
+        {
+          id: `reminder-${Date.now()}`,
+          title: this.draft.title.trim(),
+          type: 'reminder' as const,
+          start
+        }
+      ]);
+      this.isComposerOpen = false;
+    }
   }
 
   openItem(event: MouseEvent): void {
@@ -160,11 +222,11 @@ export class CalendarComponent {
   }
 
   itemsForDate(date: Date): CalendarItem[] {
-    return this.items.filter((item) => this.isSameDay(item.start, date));
+    return this.items().filter((item) => this.isSameDay(item.start, date));
   }
 
   itemsForHour(date: Date, hour: number): CalendarItem[] {
-    return this.items.filter(
+    return this.items().filter(
       (item) => this.isSameDay(item.start, date) && item.start.getHours() === hour
     );
   }
@@ -193,6 +255,90 @@ export class CalendarComponent {
 
   trackByItem(_index: number, item: CalendarItem): string {
     return item.id;
+  }
+
+  private loadData(): void {
+    this.isLoading.set(true);
+    this.error.set(null);
+
+    this.calendarService.getCalendars({ page: 1, total: 10 }).subscribe({
+      next: (result) => {
+        const primary = result.items.find((c) => c.isPrimary) ?? result.items[0];
+        if (primary) {
+          this.primaryCalendarId.set(primary.id);
+          this.loadCalendarItems();
+        } else {
+          this.calendarService.createCalendar({ title: 'My Calendar', isPrimary: true }).subscribe({
+            next: (created) => {
+              this.primaryCalendarId.set(created.id);
+              this.loadCalendarItems();
+            },
+            error: (err: unknown) => {
+              this.error.set(err instanceof Error ? err.message : 'Failed to create default calendar');
+              this.isLoading.set(false);
+            }
+          });
+        }
+      },
+      error: (err: unknown) => {
+        this.error.set(err instanceof Error ? err.message : 'Failed to load calendars');
+        this.isLoading.set(false);
+      }
+    });
+  }
+
+  private loadCalendarItems(): void {
+    forkJoin({
+      events: this.eventService.getEvents(undefined, { page: 1, total: 200 }),
+      tasks: this.taskService.getTasks(undefined, { page: 1, total: 200 })
+    }).subscribe({
+      next: ({ events, tasks }) => {
+        const eventItems = events.items.map((e) => this.mapEventToCalendarItem(e));
+        const taskItems = tasks.items.map((t) => this.mapTaskToCalendarItem(t));
+        const reminderItems = events.items.flatMap((e) =>
+          e.reminders.map((r) => this.mapReminderToCalendarItem(r))
+        );
+        this.items.set([...eventItems, ...taskItems, ...reminderItems]);
+        this.isLoading.set(false);
+      },
+      error: (err: unknown) => {
+        this.error.set(err instanceof Error ? err.message : 'Failed to load calendar data');
+        this.isLoading.set(false);
+      }
+    });
+  }
+
+  private mapEventToCalendarItem(event: EventDto): CalendarItem {
+    return {
+      id: `event-${event.id}`,
+      title: event.title,
+      type: 'event',
+      start: new Date(event.startTime),
+      end: new Date(event.endTime),
+      location: event.location ?? undefined,
+      notes: event.description ?? undefined
+    };
+  }
+
+  private mapTaskToCalendarItem(task: PlannerTaskDto): CalendarItem {
+    const startRaw = task.dueDate ?? task.reminder;
+    const start = startRaw != null ? new Date(startRaw) : new Date();
+    return {
+      id: `task-${task.id}`,
+      title: task.title,
+      type: 'task',
+      start,
+      notes: task.note ?? undefined
+    };
+  }
+
+  private mapReminderToCalendarItem(reminder: ReminderDto): CalendarItem {
+    return {
+      id: `reminder-${reminder.id}`,
+      title: reminder.title,
+      type: 'reminder',
+      start: new Date(reminder.reminderDateTime)
+    };
   }
 
   private buildDraft(date: Date): DraftItem {
