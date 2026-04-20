@@ -20,7 +20,8 @@ import {
   CreatePlannerTaskDto,
   EventDto,
   PlannerTaskDto,
-  ReminderDto
+  ReminderDto,
+  UpdateEventDto
 } from '../core/models/planner.models';
 import { CalendarItem, CalendarItemType } from './calendar.mock';
 import { CalendarSidebarComponent } from './calendar-sidebar/calendar-sidebar.component';
@@ -33,12 +34,24 @@ interface CalendarDay {
   items: CalendarItem[];
 }
 
+type RecurrenceDay = 'MO' | 'TU' | 'WE' | 'TH' | 'FR' | 'SA' | 'SU';
+
 interface DraftItem {
   title: string;
   type: CalendarItemType;
   date: Date;
+  startDate: string;
+  endDate: string;
   startTime: string;
   endTime: string;
+  isRecurring: boolean;
+  recurrenceDays: RecurrenceDay[];
+  recurrenceEndDate: string;
+}
+
+interface EditDraft extends DraftItem {
+  itemId: string;
+  eventId: number | null;
 }
 
 @Component({
@@ -61,15 +74,29 @@ export class CalendarComponent implements OnInit {
   readonly subscriptions = signal<CalendarSubscriptionDto[]>([]);
   readonly publicCalendars = signal<CalendarDto[]>([]);
 
+  readonly selectedItem = signal<CalendarItem | null>(null);
+
   viewMode: CalendarView = 'month';
   currentDate = this.startOfDay(new Date());
   selectedDate = this.startOfDay(new Date());
   items = signal<CalendarItem[]>([]);
   isComposerOpen = false;
+  isItemDetailOpen = false;
   draft: DraftItem = this.buildDraft(this.selectedDate);
+  editDraft: EditDraft | null = null;
 
   readonly weekDays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
   readonly hours = Array.from({ length: 13 }, (_, index) => index + 7);
+
+  readonly recurrenceDayOptions: ReadonlyArray<{ label: string; value: RecurrenceDay }> = [
+    { label: 'Mon', value: 'MO' },
+    { label: 'Tue', value: 'TU' },
+    { label: 'Wed', value: 'WE' },
+    { label: 'Thu', value: 'TH' },
+    { label: 'Fri', value: 'FR' },
+    { label: 'Sat', value: 'SA' },
+    { label: 'Sun', value: 'SU' }
+  ];
 
   ngOnInit(): void {
     this.loadData();
@@ -170,25 +197,59 @@ export class CalendarComponent implements OnInit {
     this.isComposerOpen = false;
   }
 
+  toggleRecurrenceDay(day: RecurrenceDay): void {
+    const current = this.draft.recurrenceDays;
+    const index = current.indexOf(day);
+    if (index === -1) {
+      this.draft = { ...this.draft, recurrenceDays: [...current, day] };
+    } else {
+      this.draft = {
+        ...this.draft,
+        recurrenceDays: current.filter((d) => d !== day)
+      };
+    }
+  }
+
+  isRecurrenceDaySelected(day: RecurrenceDay): boolean {
+    return this.draft.recurrenceDays.includes(day);
+  }
+
   saveDraft(): void {
     if (!this.draft.title.trim()) {
       return;
     }
 
-    const start = this.combineDateAndTime(this.draft.date, this.draft.startTime);
-    const end = this.combineDateAndTime(this.draft.date, this.draft.endTime);
+    const startDate = this.parseDateString(this.draft.startDate);
+    const endDate = this.parseDateString(this.draft.endDate);
+
+    if (endDate < startDate) {
+      this.error.set('End date must be on or after the start date');
+      return;
+    }
+
+    const start = this.combineDateAndTime(startDate, this.draft.startTime);
+    const end = this.combineDateAndTime(endDate, this.draft.endTime);
 
     if (this.draft.type === 'event') {
+      const isRecurring =
+        this.draft.isRecurring && this.draft.recurrenceDays.length > 0;
+
+      const recurrenceRule = isRecurring
+        ? this.buildRrule(this.draft.recurrenceDays, this.draft.recurrenceEndDate)
+        : null;
+
       const dto: CreateEventDto = {
         calendarId: this.primaryCalendarId() ?? 0,
         title: this.draft.title.trim(),
         startTime: start.toISOString(),
-        endTime: end.toISOString()
+        endTime: end.toISOString(),
+        isRecurring,
+        recurrenceRule
       };
       this.isLoading.set(true);
       this.eventService.createEvent(dto).subscribe({
         next: (created) => {
-          this.items.update((current) => [...current, this.mapEventToCalendarItem(created)]);
+          this.items.update((current) => [...current, ...this.expandRecurring(created)]);
           this.isComposerOpen = false;
           this.isLoading.set(false);
         },
@@ -201,7 +262,7 @@ export class CalendarComponent implements OnInit {
       const dto: CreatePlannerTaskDto = {
         calendarId: this.primaryCalendarId() ?? 0,
         title: this.draft.title.trim(),
-        dueDate: start.toISOString()
+        dueDate: start.toISOString()  // tasks still use startDate + startTime
       };
       this.isLoading.set(true);
       this.taskService.createTask(dto).subscribe({
@@ -227,17 +288,94 @@ export class CalendarComponent implements OnInit {
       ]);
       this.isComposerOpen = false;
     }
+
+    this.error.set(null);
   }
 
-  openItem(event: MouseEvent): void {
+  openItem(event: MouseEvent, item: CalendarItem): void {
     event.stopPropagation();
+    this.selectedItem.set(item);
+    const eventId = item.id.startsWith('event-') ? parseInt(item.id.split('-')[1], 10) : null;
+    const startDate = this.formatDateToYYYYMMDD(item.start);
+    const endDate = this.formatDateToYYYYMMDD(item.end ?? item.start);
+    this.editDraft = {
+      itemId: item.id,
+      eventId,
+      title: item.title,
+      type: item.type,
+      date: item.start,
+      startDate,
+      endDate,
+      startTime: this.formatTimeHHMM(item.start),
+      endTime: this.formatTimeHHMM(item.end ?? item.start),
+      isRecurring: false,
+      recurrenceDays: [],
+      recurrenceEndDate: ''
+    };
+    this.isItemDetailOpen = true;
+  }
+
+  saveEdit(): void {
+    if (!this.editDraft || !this.editDraft.eventId) return;
+    const startDate = this.parseDateString(this.editDraft.startDate);
+    const endDate = this.parseDateString(this.editDraft.endDate);
+    if (endDate < startDate) {
+      this.error.set('End date must be on or after the start date');
+      return;
+    }
+    const start = this.combineDateAndTime(startDate, this.editDraft.startTime);
+    const end = this.combineDateAndTime(endDate, this.editDraft.endTime);
+    const dto: UpdateEventDto = {
+      title: this.editDraft.title.trim(),
+      startTime: start.toISOString(),
+      endTime: end.toISOString()
+    };
+    this.isLoading.set(true);
+    this.eventService.updateEvent(this.editDraft.eventId, dto).subscribe({
+      next: (updated) => {
+        // Remove all items for this event (including recurring expansions), then re-expand
+        const baseId = `event-${updated.id}`;
+        this.items.update((current) => [
+          ...current.filter((i) => !i.id.startsWith(baseId)),
+          ...this.expandRecurring(updated)
+        ]);
+        this.isItemDetailOpen = false;
+        this.isLoading.set(false);
+        this.error.set(null);
+      },
+      error: (err: unknown) => {
+        this.error.set(err instanceof Error ? err.message : 'Failed to update event');
+        this.isLoading.set(false);
+      }
+    });
+  }
+
+  deleteItem(): void {
+    if (!this.editDraft?.eventId) {
+      this.isItemDetailOpen = false;
+      return;
+    }
+    const eventId = this.editDraft.eventId;
+    const baseId = `event-${eventId}`;
+    this.isLoading.set(true);
+    this.eventService.deleteEvent(eventId).subscribe({
+      next: () => {
+        this.items.update((current) => current.filter((i) => !i.id.startsWith(baseId)));
+        this.isItemDetailOpen = false;
+        this.isLoading.set(false);
+      },
+      error: (err: unknown) => {
+        this.error.set(err instanceof Error ? err.message : 'Failed to delete event');
+        this.isLoading.set(false);
+      }
+    });
   }
 
   itemsForDate(date: Date): CalendarItem[] {
     const visible = this.visibleCalendarIds;
     return this.items().filter(
       (item) =>
-        this.isSameDay(item.start, date) &&
+        this.isDateInRange(item.start, item.end ?? item.start, date) &&
         (item.calendarId == null || visible.has(item.calendarId))
     );
   }
@@ -372,15 +510,18 @@ export class CalendarComponent implements OnInit {
   }
 
   private loadCalendarItems(): void {
+    const calendarId = this.primaryCalendarId() ?? undefined;
     forkJoin({
-      events: this.eventService.getEvents(undefined, { page: 1, total: 200 }),
-      tasks: this.taskService.getTasks(undefined, { page: 1, total: 200 })
+      events: this.eventService.getEvents(calendarId, { page: 1, total: 200 }),
+      tasks: this.taskService.getTasks(calendarId, { page: 1, total: 200 })
     }).subscribe({
       next: ({ events, tasks }) => {
-        const eventItems = events.items.map((e) => this.mapEventToCalendarItem(e));
-        const taskItems = tasks.items.map((t) => this.mapTaskToCalendarItem(t));
-        const reminderItems = events.items.flatMap((e) =>
-          e.reminders.map((r) => this.mapReminderToCalendarItem(r))
+        const eventList = events?.items ?? [];
+        const taskList = tasks?.items ?? [];
+        const eventItems = eventList.flatMap((e) => this.expandRecurring(e));
+        const taskItems = taskList.map((t) => this.mapTaskToCalendarItem(t));
+        const reminderItems = eventList.flatMap((e) =>
+          (e.reminders ?? []).map((r) => this.mapReminderToCalendarItem(r))
         );
         this.items.set([...eventItems, ...taskItems, ...reminderItems]);
         this.isLoading.set(false);
@@ -428,13 +569,43 @@ export class CalendarComponent implements OnInit {
   }
 
   private buildDraft(date: Date): DraftItem {
+    const dateStr = this.formatDateToYYYYMMDD(date);
     return {
       title: '',
       type: 'event',
       date: new Date(date),
+      startDate: dateStr,
+      endDate: dateStr,
       startTime: '09:00',
-      endTime: '10:00'
+      endTime: '10:00',
+      isRecurring: false,
+      recurrenceDays: [],
+      recurrenceEndDate: ''
     };
+  }
+
+  private formatDateToYYYYMMDD(date: Date): string {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
+
+  private parseDateString(dateStr: string): Date {
+    // Parse "YYYY-MM-DD" without timezone shifting (avoids UTC midnight offset)
+    const [year, month, day] = dateStr.split('-').map((v) => Number.parseInt(v, 10));
+    return new Date(year, month - 1, day);
+  }
+
+  private buildRrule(days: readonly RecurrenceDay[], endDate: string): string {
+    const byDay = days.join(',');
+    let rule = `FREQ=WEEKLY;BYDAY=${byDay}`;
+    if (endDate) {
+      // RRULE UNTIL format: YYYYMMDDTHHMMSSZ
+      const until = endDate.replace(/-/g, '') + 'T000000Z';
+      rule += `;UNTIL=${until}`;
+    }
+    return rule;
   }
 
   private combineDateAndTime(date: Date, time: string): Date {
@@ -473,5 +644,92 @@ export class CalendarComponent implements OnInit {
 
   private formatShortDate(date: Date): string {
     return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  }
+
+  private formatTimeHHMM(date: Date): string {
+    return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+  }
+
+  private isDateInRange(start: Date, end: Date, date: Date): boolean {
+    const s = this.startOfDay(start);
+    const e = this.startOfDay(end);
+    const d = this.startOfDay(date);
+    return d >= s && d <= e;
+  }
+
+  private expandRecurring(event: EventDto): CalendarItem[] {
+    if (!event.isRecurring || !event.recurrenceRule) {
+      return [this.mapEventToCalendarItem(event)];
+    }
+
+    // Only handle FREQ=WEEKLY (the only frequency the UI creates)
+    if (!event.recurrenceRule.includes('FREQ=WEEKLY')) {
+      return [this.mapEventToCalendarItem(event)];
+    }
+
+    // Parse BYDAY
+    const byDayMatch = event.recurrenceRule.match(/BYDAY=([A-Z,]+)/);
+    if (!byDayMatch) {
+      return [this.mapEventToCalendarItem(event)];
+    }
+    const byDayRaw = byDayMatch[1].split(',');
+
+    // Day-of-week mapping: JS getDay() values
+    const dayMap: Record<string, number> = {
+      SU: 0, MO: 1, TU: 2, WE: 3, TH: 4, FR: 5, SA: 6
+    };
+    const targetDays = new Set<number>(
+      byDayRaw.filter((d) => d in dayMap).map((d) => dayMap[d])
+    );
+
+    // Parse optional UNTIL
+    let untilDate: Date | null = null;
+    const untilMatch = event.recurrenceRule.match(/UNTIL=(\d{8}T\d{6}Z)/);
+    if (untilMatch) {
+      const raw = untilMatch[1];
+      const year = parseInt(raw.slice(0, 4), 10);
+      const month = parseInt(raw.slice(4, 6), 10) - 1;
+      const day = parseInt(raw.slice(6, 8), 10);
+      untilDate = new Date(Date.UTC(year, month, day));
+    }
+
+    // Expansion window: from event start up to min(UNTIL, today + 365 days)
+    const today = new Date();
+    const maxDate = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 365);
+    const windowEnd = untilDate && untilDate < maxDate ? untilDate : maxDate;
+
+    const eventStart = new Date(event.startTime);
+    const eventEnd = new Date(event.endTime);
+    const durationMs = eventEnd.getTime() - eventStart.getTime();
+
+    const items: CalendarItem[] = [];
+    const cursor = this.startOfDay(eventStart);
+
+    while (cursor <= windowEnd) {
+      if (targetDays.has(cursor.getDay())) {
+        const occurrenceStart = new Date(
+          cursor.getFullYear(),
+          cursor.getMonth(),
+          cursor.getDate(),
+          eventStart.getHours(),
+          eventStart.getMinutes(),
+          eventStart.getSeconds()
+        );
+        const occurrenceEnd = new Date(occurrenceStart.getTime() + durationMs);
+        items.push({
+          id: `event-${event.id}-${occurrenceStart.toISOString()}`,
+          title: event.title,
+          type: 'event',
+          start: occurrenceStart,
+          end: occurrenceEnd,
+          location: event.location ?? undefined,
+          notes: event.description ?? undefined,
+          calendarId: event.calendarId
+        });
+      }
+      cursor.setDate(cursor.getDate() + 1);
+    }
+
+    return items.length > 0 ? items : [this.mapEventToCalendarItem(event)];
   }
 }
