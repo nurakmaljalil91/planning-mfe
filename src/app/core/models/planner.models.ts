@@ -72,6 +72,7 @@ export interface CalendarDto {
   isVisible: boolean;
   isGoogleCalendar: boolean;
   userId: string;
+  color: string | null;
   events: EventDto[];
   tasks: PlannerTaskDto[];
 }
@@ -142,6 +143,7 @@ export interface UpdateCalendarDto {
   title?: string;
   description?: string | null;
   timeZone?: string | null;
+  color?: string | null;
 }
 
 export interface CreateReminderDto {

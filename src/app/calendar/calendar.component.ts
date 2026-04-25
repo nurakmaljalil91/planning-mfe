@@ -3,6 +3,7 @@ import {
   ChangeDetectionStrategy,
   Component,
   OnInit,
+  computed,
   inject,
   signal
 } from '@angular/core';
@@ -39,11 +40,13 @@ type RecurrenceDay = 'MO' | 'TU' | 'WE' | 'TH' | 'FR' | 'SA' | 'SU';
 interface DraftItem {
   title: string;
   type: CalendarItemType;
+  calendarId: number;
   date: Date;
   startDate: string;
   endDate: string;
   startTime: string;
   endTime: string;
+  isAllDay: boolean;
   isRecurring: boolean;
   recurrenceDays: RecurrenceDay[];
   recurrenceEndDate: string;
@@ -75,6 +78,22 @@ export class CalendarComponent implements OnInit {
   readonly publicCalendars = signal<CalendarDto[]>([]);
 
   readonly selectedItem = signal<CalendarItem | null>(null);
+
+  private readonly COLOR_PALETTE = ['#3b82f6', '#22c55e', '#a855f7', '#f97316', '#ec4899', '#14b8a6'];
+
+  readonly calendarColorMap = computed(() => {
+    const map = new Map<number, string>();
+    this.ownCalendars().forEach((cal, i) => {
+      map.set(cal.id, cal.color ?? this.COLOR_PALETTE[i % this.COLOR_PALETTE.length]);
+    });
+    this.subscriptions().forEach((sub, i) => {
+      if (sub.calendar) {
+        const offset = this.ownCalendars().length + i;
+        map.set(sub.calendar.id, sub.calendar.color ?? this.COLOR_PALETTE[offset % this.COLOR_PALETTE.length]);
+      }
+    });
+    return map;
+  });
 
   viewMode: CalendarView = 'month';
   currentDate = this.startOfDay(new Date());
@@ -214,6 +233,10 @@ export class CalendarComponent implements OnInit {
     return this.draft.recurrenceDays.includes(day);
   }
 
+  setDraftCalendar(id: string | number): void {
+    this.draft = { ...this.draft, calendarId: +id };
+  }
+
   saveDraft(): void {
     if (!this.draft.title.trim()) {
       return;
@@ -227,8 +250,12 @@ export class CalendarComponent implements OnInit {
       return;
     }
 
-    const start = this.combineDateAndTime(startDate, this.draft.startTime);
-    const end = this.combineDateAndTime(endDate, this.draft.endTime);
+    const start = this.draft.isAllDay
+      ? this.combineDateAndTime(startDate, '00:00')
+      : this.combineDateAndTime(startDate, this.draft.startTime);
+    const end = this.draft.isAllDay
+      ? this.combineDateAndTime(endDate, '23:59')
+      : this.combineDateAndTime(endDate, this.draft.endTime);
 
     if (this.draft.type === 'event') {
       const isRecurring =
@@ -239,10 +266,11 @@ export class CalendarComponent implements OnInit {
         : null;
 
       const dto: CreateEventDto = {
-        calendarId: this.primaryCalendarId() ?? 0,
+        calendarId: this.draft.calendarId,
         title: this.draft.title.trim(),
         startTime: start.toISOString(),
         endTime: end.toISOString(),
+        isAllDay: this.draft.isAllDay,
         isRecurring,
         recurrenceRule
       };
@@ -260,7 +288,7 @@ export class CalendarComponent implements OnInit {
       });
     } else if (this.draft.type === 'task') {
       const dto: CreatePlannerTaskDto = {
-        calendarId: this.primaryCalendarId() ?? 0,
+        calendarId: this.draft.calendarId,
         title: this.draft.title.trim(),
         dueDate: start.toISOString()  // tasks still use startDate + startTime
       };
@@ -303,6 +331,8 @@ export class CalendarComponent implements OnInit {
       eventId,
       title: item.title,
       type: item.type,
+      calendarId: item.calendarId ?? this.primaryCalendarId() ?? 0,
+      isAllDay: item.isAllDay ?? false,
       date: item.start,
       startDate,
       endDate,
@@ -380,10 +410,21 @@ export class CalendarComponent implements OnInit {
     );
   }
 
+  allDayItemsForDate(date: Date): CalendarItem[] {
+    const visible = this.visibleCalendarIds;
+    return this.items().filter(
+      (item) =>
+        item.isAllDay &&
+        this.isDateInRange(item.start, item.end ?? item.start, date) &&
+        (item.calendarId == null || visible.has(item.calendarId))
+    );
+  }
+
   itemsForHour(date: Date, hour: number): CalendarItem[] {
     const visible = this.visibleCalendarIds;
     return this.items().filter(
       (item) =>
+        !item.isAllDay &&
         this.isSameDay(item.start, date) &&
         item.start.getHours() === hour &&
         (item.calendarId == null || visible.has(item.calendarId))
@@ -432,6 +473,19 @@ export class CalendarComponent implements OnInit {
         this.subscriptions.update((subs) => subs.filter((s) => s.calendarId !== calendarId));
       }
     });
+  }
+
+  onCalendarColorChanged(event: { calendarId: number; color: string }): void {
+    this.calendarService.updateCalendar(event.calendarId, { color: event.color }).subscribe({
+      next: (updated) => {
+        this.ownCalendars.update((cals) => cals.map((c) => (c.id === updated.id ? updated : c)));
+      }
+    });
+  }
+
+  calendarColor(item: CalendarItem): string {
+    if (item.calendarId == null) return 'var(--cxs-color-primary)';
+    return this.calendarColorMap().get(item.calendarId) ?? 'var(--cxs-color-primary)';
   }
 
   formatHour(hour: number): string {
@@ -510,10 +564,9 @@ export class CalendarComponent implements OnInit {
   }
 
   private loadCalendarItems(): void {
-    const calendarId = this.primaryCalendarId() ?? undefined;
     forkJoin({
-      events: this.eventService.getEvents(calendarId, { page: 1, total: 200 }),
-      tasks: this.taskService.getTasks(calendarId, { page: 1, total: 200 })
+      events: this.eventService.getEvents(undefined, { page: 1, total: 200 }),
+      tasks: this.taskService.getTasks(undefined, { page: 1, total: 200 })
     }).subscribe({
       next: ({ events, tasks }) => {
         const eventList = events?.items ?? [];
@@ -540,6 +593,7 @@ export class CalendarComponent implements OnInit {
       type: 'event',
       start: new Date(event.startTime),
       end: new Date(event.endTime),
+      isAllDay: event.isAllDay,
       location: event.location ?? undefined,
       notes: event.description ?? undefined,
       calendarId: event.calendarId
@@ -573,11 +627,13 @@ export class CalendarComponent implements OnInit {
     return {
       title: '',
       type: 'event',
+      calendarId: this.primaryCalendarId() ?? 0,
       date: new Date(date),
       startDate: dateStr,
       endDate: dateStr,
       startTime: '09:00',
       endTime: '10:00',
+      isAllDay: false,
       isRecurring: false,
       recurrenceDays: [],
       recurrenceEndDate: ''
@@ -722,6 +778,7 @@ export class CalendarComponent implements OnInit {
           type: 'event',
           start: occurrenceStart,
           end: occurrenceEnd,
+          isAllDay: event.isAllDay,
           location: event.location ?? undefined,
           notes: event.description ?? undefined,
           calendarId: event.calendarId

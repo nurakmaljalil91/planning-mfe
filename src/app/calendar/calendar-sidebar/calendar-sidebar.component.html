@@ -8,7 +8,18 @@
     <ul class="flex flex-col gap-1">
       @for (cal of ownCalendars; track trackById($index, cal); let i = $index) {
         <li class="flex items-center gap-2 rounded-(--cxs-radius-md) px-2 py-1.5 transition hover:bg-(--cxs-color-surface-hover)">
-          <span class="inline-block h-2.5 w-2.5 shrink-0 rounded-full {{ dotColor(i) }}"></span>
+          <label
+            class="relative inline-flex h-2.5 w-2.5 shrink-0 cursor-pointer rounded-full"
+            [style.background-color]="dotColor(cal, i)"
+            [attr.title]="'Change color for ' + cal.title"
+          >
+            <input
+              class="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+              type="color"
+              [value]="dotColor(cal, i)"
+              (change)="changeColor(cal.id, $any($event.target).value)"
+            />
+          </label>
           <span class="flex-1 truncate text-(--cxs-color-on-surface)" [class.opacity-40]="!cal.isVisible">
             {{ cal.title }}
           </span>
@@ -68,7 +79,10 @@
       <ul class="flex flex-col gap-1">
         @for (sub of subscriptions; track trackByCalendarId($index, sub); let i = $index) {
           <li class="flex items-center gap-2 rounded-(--cxs-radius-md) px-2 py-1.5 transition hover:bg-(--cxs-color-surface-hover)">
-            <span class="inline-block h-2.5 w-2.5 shrink-0 rounded-full {{ dotColor(ownCalendars.length + i) }}"></span>
+            <span
+              class="inline-block h-2.5 w-2.5 shrink-0 rounded-full"
+              [style.background-color]="sub.calendar ? dotColor(sub.calendar, ownCalendars.length + i) : '#94a3b8'"
+            ></span>
             <span class="flex-1 truncate text-(--cxs-color-on-surface)" [class.opacity-40]="!sub.isVisible">
               {{ sub.calendar?.title ?? 'Calendar #' + sub.calendarId }}
             </span>

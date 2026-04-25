@@ -6,6 +6,7 @@ export interface CalendarItem {
   type: CalendarItemType;
   start: Date;
   end?: Date;
+  isAllDay?: boolean;
   location?: string;
   notes?: string;
   calendarId?: number;

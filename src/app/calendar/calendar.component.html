@@ -64,6 +64,7 @@
         [publicCalendars]="publicCalendars()"
         (visibilityToggled)="onVisibilityToggled($event)"
         (calendarCreated)="onCalendarCreated($event)"
+        (calendarColorChanged)="onCalendarColorChanged($event)"
         (subscribed)="onSubscribed($event)"
         (unsubscribed)="onUnsubscribed($event)"
       />
@@ -108,11 +109,7 @@
                     >
                       <span
                         class="inline-block h-2 w-2 rounded-full"
-                        [ngClass]="{
-                          'bg-(--cxs-color-primary)': item.type === 'event',
-                          'bg-(--cxs-color-on-surface-muted)': item.type === 'task',
-                          'bg-(--cxs-color-border)': item.type === 'reminder'
-                        }"
+                        [style.background-color]="calendarColor(item)"
                       ></span>
                       {{ item.title }}
                     </span>
@@ -156,36 +153,45 @@
                     {{ day.date | date: 'd' }}
                   </span>
                 </button>
+                <!-- All-day items -->
+                @if (allDayItemsForDate(day.date).length > 0) {
+                  <div class="flex flex-col gap-1">
+                    @for (item of allDayItemsForDate(day.date); track trackByItem($index, item)) {
+                      <span
+                        class="cursor-pointer rounded-full px-2.5 py-1 text-[0.75rem] font-medium text-white truncate"
+                        [style.background-color]="calendarColor(item)"
+                        (click)="openItem($event, item)"
+                      >
+                        {{ item.title }}
+                      </span>
+                    }
+                  </div>
+                }
+
                 <div class="flex flex-col gap-2.5">
-                  @if (day.items.length === 0) {
+                  @if (day.items.length === 0 && allDayItemsForDate(day.date).length === 0) {
                     <div class="py-2.5 text-[0.85rem] text-(--cxs-color-on-surface-muted)">
                       No items
                     </div>
                   }
                   @for (item of day.items; track trackByItem($index, item)) {
-                    <div
-                      class="cursor-pointer rounded-(--cxs-radius-md) border border-(--cxs-color-border) bg-(--cxs-color-surface) p-3 transition hover:bg-(--cxs-color-surface-hover)"
-                      (click)="openItem($event, item)"
-                    >
-                      <div class="mb-1 font-semibold">{{ item.title }}</div>
+                    @if (!item.isAllDay) {
                       <div
-                        class="flex items-center gap-2 text-[0.8rem] text-(--cxs-color-on-surface-muted)"
+                        class="cursor-pointer rounded-(--cxs-radius-md) border bg-(--cxs-color-surface) p-3 transition hover:brightness-95"
+                        [style.border-color]="calendarColor(item)"
+                        [style.border-left-width]="'3px'"
+                        (click)="openItem($event, item)"
                       >
-                        <span
-                          class="rounded-full px-1.5 py-0.5 text-[0.65rem] uppercase tracking-[0.08em]"
-                          [ngClass]="{
-                            'bg-(--cxs-color-primary-ghost) text-(--cxs-color-primary)':
-                              item.type === 'event',
-                            'bg-(--cxs-color-surface-hover) text-(--cxs-color-on-surface)':
-                              item.type === 'task',
-                            'bg-(--cxs-color-border) text-(--cxs-color-on-surface)':
-                              item.type === 'reminder'
-                          }"
-                          >{{ item.type }}</span
-                        >
-                        <span>{{ formatItemTime(item) }}</span>
+                        <div class="mb-1 font-semibold">{{ item.title }}</div>
+                        <div class="flex items-center gap-2 text-[0.8rem] text-(--cxs-color-on-surface-muted)">
+                          <span
+                            class="inline-block h-2 w-2 shrink-0 rounded-full"
+                            [style.background-color]="calendarColor(item)"
+                          ></span>
+                          <span>{{ formatItemTime(item) }}</span>
+                        </div>
                       </div>
-                    </div>
+                    }
                   }
                 </div>
               </div>
@@ -207,6 +213,22 @@
               >Add for day</cxs-button
             >
           </div>
+          <!-- All-day strip -->
+          @if (allDayItemsForDate(currentDate).length > 0) {
+            <div class="mb-3 flex flex-wrap gap-2 rounded-(--cxs-radius-md) border border-(--cxs-color-border) bg-(--cxs-color-surface) p-3">
+              <span class="self-center text-[0.75rem] uppercase tracking-[0.08em] text-(--cxs-color-on-surface-muted) mr-1">All day</span>
+              @for (item of allDayItemsForDate(currentDate); track trackByItem($index, item)) {
+                <span
+                  class="inline-flex cursor-pointer items-center gap-1.5 rounded-full px-3 py-1 text-[0.8rem] font-medium text-white"
+                  [style.background-color]="calendarColor(item)"
+                  (click)="openItem($event, item)"
+                >
+                  {{ item.title }}
+                </span>
+              }
+            </div>
+          }
+
           <div class="flex flex-col gap-3">
             @for (hour of hours; track hour) {
               <div
@@ -220,25 +242,17 @@
                 <div class="flex flex-col gap-2">
                   @for (item of itemsForHour(currentDate, hour); track trackByItem($index, item)) {
                     <div
-                      class="cursor-pointer rounded-(--cxs-radius-md) border border-(--cxs-color-border) bg-(--cxs-color-surface) p-3 transition hover:bg-(--cxs-color-surface-hover)"
+                      class="cursor-pointer rounded-(--cxs-radius-md) border bg-(--cxs-color-surface) p-3 transition hover:brightness-95"
+                      [style.border-color]="calendarColor(item)"
+                      [style.border-left-width]="'3px'"
                       (click)="openItem($event, item)"
                     >
                       <div class="mb-1 font-semibold">{{ item.title }}</div>
-                      <div
-                        class="flex items-center gap-2 text-[0.8rem] text-(--cxs-color-on-surface-muted)"
-                      >
+                      <div class="flex items-center gap-2 text-[0.8rem] text-(--cxs-color-on-surface-muted)">
                         <span
-                          class="rounded-full px-1.5 py-0.5 text-[0.65rem] uppercase tracking-[0.08em]"
-                          [ngClass]="{
-                            'bg-(--cxs-color-primary-ghost) text-(--cxs-color-primary)':
-                              item.type === 'event',
-                            'bg-(--cxs-color-surface-hover) text-(--cxs-color-on-surface)':
-                              item.type === 'task',
-                            'bg-(--cxs-color-border) text-(--cxs-color-on-surface)':
-                              item.type === 'reminder'
-                          }"
-                          >{{ item.type }}</span
-                        >
+                          class="inline-block h-2 w-2 shrink-0 rounded-full"
+                          [style.background-color]="calendarColor(item)"
+                        ></span>
                         <span>{{ formatItemTime(item) }}</span>
                       </div>
                     </div>
@@ -281,19 +295,35 @@
 
         <!-- Start / End date-time (only for events) -->
         @if (editDraft.type === 'event') {
+          <label class="flex cursor-pointer items-center gap-2.5 text-[0.85rem] text-(--cxs-color-on-surface)">
+            <input
+              class="h-4 w-4 cursor-pointer accent-(--cxs-color-primary)"
+              type="checkbox"
+              [(ngModel)]="editDraft.isAllDay"
+            />
+            All day
+          </label>
           <div class="grid gap-3 grid-cols-2">
             <div class="flex flex-col gap-1.5">
-              <span class="text-[0.85rem] text-(--cxs-color-on-surface-muted)">Start</span>
+              <span class="text-[0.85rem] text-(--cxs-color-on-surface-muted)">
+                {{ editDraft.isAllDay ? 'Start date' : 'Start' }}
+              </span>
               <div class="flex gap-2">
                 <input class="min-w-0 flex-1 rounded-(--cxs-radius-md) border border-(--cxs-color-border) bg-(--cxs-color-surface) px-2.5 py-2 text-[0.85rem] text-(--cxs-color-on-surface) transition focus:border-(--cxs-color-focus) focus:outline-none focus:ring-2 focus:ring-(--cxs-color-focus)" type="date" [(ngModel)]="editDraft.startDate" />
-                <input class="w-[6.5rem] shrink-0 rounded-(--cxs-radius-md) border border-(--cxs-color-border) bg-(--cxs-color-surface) px-2.5 py-2 text-[0.85rem] text-(--cxs-color-on-surface) transition focus:border-(--cxs-color-focus) focus:outline-none focus:ring-2 focus:ring-(--cxs-color-focus)" type="time" [(ngModel)]="editDraft.startTime" />
+                @if (!editDraft.isAllDay) {
+                  <input class="w-[6.5rem] shrink-0 rounded-(--cxs-radius-md) border border-(--cxs-color-border) bg-(--cxs-color-surface) px-2.5 py-2 text-[0.85rem] text-(--cxs-color-on-surface) transition focus:border-(--cxs-color-focus) focus:outline-none focus:ring-2 focus:ring-(--cxs-color-focus)" type="time" [(ngModel)]="editDraft.startTime" />
+                }
               </div>
             </div>
             <div class="flex flex-col gap-1.5">
-              <span class="text-[0.85rem] text-(--cxs-color-on-surface-muted)">End</span>
+              <span class="text-[0.85rem] text-(--cxs-color-on-surface-muted)">
+                {{ editDraft.isAllDay ? 'End date' : 'End' }}
+              </span>
               <div class="flex gap-2">
                 <input class="min-w-0 flex-1 rounded-(--cxs-radius-md) border border-(--cxs-color-border) bg-(--cxs-color-surface) px-2.5 py-2 text-[0.85rem] text-(--cxs-color-on-surface) transition focus:border-(--cxs-color-focus) focus:outline-none focus:ring-2 focus:ring-(--cxs-color-focus)" type="date" [(ngModel)]="editDraft.endDate" />
-                <input class="w-[6.5rem] shrink-0 rounded-(--cxs-radius-md) border border-(--cxs-color-border) bg-(--cxs-color-surface) px-2.5 py-2 text-[0.85rem] text-(--cxs-color-on-surface) transition focus:border-(--cxs-color-focus) focus:outline-none focus:ring-2 focus:ring-(--cxs-color-focus)" type="time" [(ngModel)]="editDraft.endTime" />
+                @if (!editDraft.isAllDay) {
+                  <input class="w-[6.5rem] shrink-0 rounded-(--cxs-radius-md) border border-(--cxs-color-border) bg-(--cxs-color-surface) px-2.5 py-2 text-[0.85rem] text-(--cxs-color-on-surface) transition focus:border-(--cxs-color-focus) focus:outline-none focus:ring-2 focus:ring-(--cxs-color-focus)" type="time" [(ngModel)]="editDraft.endTime" />
+                }
               </div>
             </div>
           </div>
@@ -352,39 +382,79 @@
         </label>
       </div>
 
-      <!-- Date + time fields — shown for all types -->
+      <!-- Calendar selector -->
+      <label class="flex flex-col gap-1.5 text-[0.85rem] text-(--cxs-color-on-surface-muted)">
+        Calendar
+        <div class="flex items-center gap-2">
+          <span
+            class="inline-block h-2.5 w-2.5 shrink-0 rounded-full"
+            [style.background-color]="calendarColorMap().get(draft.calendarId) ?? 'var(--cxs-color-primary)'"
+          ></span>
+          <select
+            class="flex-1 rounded-(--cxs-radius-md) border border-(--cxs-color-border) bg-(--cxs-color-surface) px-2.5 py-2 text-(--cxs-color-on-surface) transition focus:border-(--cxs-color-focus) focus:outline-none focus:ring-2 focus:ring-(--cxs-color-focus)"
+            [ngModel]="draft.calendarId"
+            (ngModelChange)="setDraftCalendar($event)"
+          >
+            @for (cal of ownCalendars(); track cal.id) {
+              <option [value]="cal.id">{{ cal.title }}</option>
+            }
+          </select>
+        </div>
+      </label>
+
+      <!-- All day toggle — events only -->
+      @if (draft.type === 'event') {
+        <label class="flex cursor-pointer items-center gap-2.5 text-[0.85rem] text-(--cxs-color-on-surface)">
+          <input
+            class="h-4 w-4 cursor-pointer accent-(--cxs-color-primary)"
+            type="checkbox"
+            [(ngModel)]="draft.isAllDay"
+          />
+          All day
+        </label>
+      }
+
+      <!-- Date + time fields -->
       <div class="grid gap-3 grid-cols-2">
         <!-- Start -->
         <div class="flex flex-col gap-1.5">
-          <span class="text-[0.85rem] text-(--cxs-color-on-surface-muted)">Start</span>
+          <span class="text-[0.85rem] text-(--cxs-color-on-surface-muted)">
+            {{ draft.type === 'event' && draft.isAllDay ? 'Start date' : 'Start' }}
+          </span>
           <div class="flex gap-2">
             <input
               class="min-w-0 flex-1 rounded-(--cxs-radius-md) border border-(--cxs-color-border) bg-(--cxs-color-surface) px-2.5 py-2 text-[0.85rem] text-(--cxs-color-on-surface) transition focus:border-(--cxs-color-focus) focus:outline-none focus:ring-2 focus:ring-(--cxs-color-focus)"
               type="date"
               [(ngModel)]="draft.startDate"
             />
-            <input
-              class="w-[6.5rem] shrink-0 rounded-(--cxs-radius-md) border border-(--cxs-color-border) bg-(--cxs-color-surface) px-2.5 py-2 text-[0.85rem] text-(--cxs-color-on-surface) transition focus:border-(--cxs-color-focus) focus:outline-none focus:ring-2 focus:ring-(--cxs-color-focus)"
-              type="time"
-              [(ngModel)]="draft.startTime"
-            />
+            @if (!(draft.type === 'event' && draft.isAllDay)) {
+              <input
+                class="w-[6.5rem] shrink-0 rounded-(--cxs-radius-md) border border-(--cxs-color-border) bg-(--cxs-color-surface) px-2.5 py-2 text-[0.85rem] text-(--cxs-color-on-surface) transition focus:border-(--cxs-color-focus) focus:outline-none focus:ring-2 focus:ring-(--cxs-color-focus)"
+                type="time"
+                [(ngModel)]="draft.startTime"
+              />
+            }
           </div>
         </div>
 
         <!-- End -->
         <div class="flex flex-col gap-1.5">
-          <span class="text-[0.85rem] text-(--cxs-color-on-surface-muted)">End</span>
+          <span class="text-[0.85rem] text-(--cxs-color-on-surface-muted)">
+            {{ draft.type === 'event' && draft.isAllDay ? 'End date' : 'End' }}
+          </span>
           <div class="flex gap-2">
             <input
               class="min-w-0 flex-1 rounded-(--cxs-radius-md) border border-(--cxs-color-border) bg-(--cxs-color-surface) px-2.5 py-2 text-[0.85rem] text-(--cxs-color-on-surface) transition focus:border-(--cxs-color-focus) focus:outline-none focus:ring-2 focus:ring-(--cxs-color-focus)"
               type="date"
               [(ngModel)]="draft.endDate"
             />
-            <input
-              class="w-[6.5rem] shrink-0 rounded-(--cxs-radius-md) border border-(--cxs-color-border) bg-(--cxs-color-surface) px-2.5 py-2 text-[0.85rem] text-(--cxs-color-on-surface) transition focus:border-(--cxs-color-focus) focus:outline-none focus:ring-2 focus:ring-(--cxs-color-focus)"
-              type="time"
-              [(ngModel)]="draft.endTime"
-            />
+            @if (!(draft.type === 'event' && draft.isAllDay)) {
+              <input
+                class="w-[6.5rem] shrink-0 rounded-(--cxs-radius-md) border border-(--cxs-color-border) bg-(--cxs-color-surface) px-2.5 py-2 text-[0.85rem] text-(--cxs-color-on-surface) transition focus:border-(--cxs-color-focus) focus:outline-none focus:ring-2 focus:ring-(--cxs-color-focus)"
+                type="time"
+                [(ngModel)]="draft.endTime"
+              />
+            }
           </div>
         </div>
       </div>

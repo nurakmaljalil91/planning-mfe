@@ -12,14 +12,7 @@ import { CxsButtonComponent } from 'cerxos-ui';
 
 import { CalendarDto, CalendarSubscriptionDto } from '../../core/models/planner.models';
 
-const DOT_COLORS = [
-  'bg-blue-500',
-  'bg-green-500',
-  'bg-purple-500',
-  'bg-orange-500',
-  'bg-pink-500',
-  'bg-teal-500'
-];
+const COLOR_PALETTE = ['#3b82f6', '#22c55e', '#a855f7', '#f97316', '#ec4899', '#14b8a6'];
 
 /// Sidebar showing own calendars, subscriptions, and public calendar discovery.
 @Component({
@@ -35,6 +28,7 @@ export class CalendarSidebarComponent {
 
   @Output() visibilityToggled = new EventEmitter<{ type: 'own' | 'subscription'; calendarId: number }>();
   @Output() calendarCreated = new EventEmitter<string>();
+  @Output() calendarColorChanged = new EventEmitter<{ calendarId: number; color: string }>();
   @Output() subscribed = new EventEmitter<number>();
   @Output() unsubscribed = new EventEmitter<number>();
 
@@ -42,8 +36,12 @@ export class CalendarSidebarComponent {
   readonly newCalendarTitle = signal('');
   readonly isDiscoverOpen = signal(false);
 
-  dotColor(index: number): string {
-    return DOT_COLORS[index % DOT_COLORS.length];
+  dotColor(cal: CalendarDto, index: number): string {
+    return cal.color ?? COLOR_PALETTE[index % COLOR_PALETTE.length];
+  }
+
+  changeColor(calendarId: number, color: string): void {
+    this.calendarColorChanged.emit({ calendarId, color });
   }
 
   get unsubscribedPublicCalendars(): CalendarDto[] {
