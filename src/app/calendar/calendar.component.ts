@@ -17,15 +17,14 @@ import { PlannerTaskService } from '../core/services/planner-task.service';
 import {
   CalendarDto,
   CalendarSubscriptionDto,
-  CreateEventDto,
-  CreatePlannerTaskDto,
   EventDto,
   PlannerTaskDto,
   ReminderDto,
   UpdateEventDto
 } from '../core/models/planner.models';
-import { CalendarItem, CalendarItemType } from './calendar.mock';
+import { CalendarItem } from './calendar.mock';
 import { CalendarSidebarComponent } from './calendar-sidebar/calendar-sidebar.component';
+import { EventComposerComponent } from './event-composer/event-composer.component';
 
 type CalendarView = 'month' | 'week' | 'day';
 
@@ -35,31 +34,22 @@ interface CalendarDay {
   items: CalendarItem[];
 }
 
-type RecurrenceDay = 'MO' | 'TU' | 'WE' | 'TH' | 'FR' | 'SA' | 'SU';
-
-interface DraftItem {
+interface EditDraft {
+  itemId: string;
+  eventId: number | null;
   title: string;
-  type: CalendarItemType;
+  type: string;
   calendarId: number;
-  date: Date;
+  isAllDay: boolean;
   startDate: string;
   endDate: string;
   startTime: string;
   endTime: string;
-  isAllDay: boolean;
-  isRecurring: boolean;
-  recurrenceDays: RecurrenceDay[];
-  recurrenceEndDate: string;
-}
-
-interface EditDraft extends DraftItem {
-  itemId: string;
-  eventId: number | null;
 }
 
 @Component({
   selector: 'app-calendar',
-  imports: [CommonModule, FormsModule, CxsButtonComponent, CxsDialogComponent, CalendarSidebarComponent],
+  imports: [CommonModule, FormsModule, CxsButtonComponent, CxsDialogComponent, CalendarSidebarComponent, EventComposerComponent],
   templateUrl: './calendar.component.html',
   styleUrl: './calendar.component.css',
   changeDetection: ChangeDetectionStrategy.OnPush
@@ -101,21 +91,10 @@ export class CalendarComponent implements OnInit {
   items = signal<CalendarItem[]>([]);
   isComposerOpen = false;
   isItemDetailOpen = false;
-  draft: DraftItem = this.buildDraft(this.selectedDate);
   editDraft: EditDraft | null = null;
 
   readonly weekDays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
   readonly hours = Array.from({ length: 13 }, (_, index) => index + 7);
-
-  readonly recurrenceDayOptions: ReadonlyArray<{ label: string; value: RecurrenceDay }> = [
-    { label: 'Mon', value: 'MO' },
-    { label: 'Tue', value: 'TU' },
-    { label: 'Wed', value: 'WE' },
-    { label: 'Thu', value: 'TH' },
-    { label: 'Fri', value: 'FR' },
-    { label: 'Sat', value: 'SA' },
-    { label: 'Sun', value: 'SU' }
-  ];
 
   ngOnInit(): void {
     this.loadData();
@@ -208,116 +187,11 @@ export class CalendarComponent implements OnInit {
   openComposer(date?: Date): void {
     const targetDate = date ? this.startOfDay(date) : this.startOfDay(this.currentDate);
     this.selectedDate = targetDate;
-    this.draft = this.buildDraft(targetDate);
     this.isComposerOpen = true;
   }
 
-  closeComposer(): void {
-    this.isComposerOpen = false;
-  }
-
-  toggleRecurrenceDay(day: RecurrenceDay): void {
-    const current = this.draft.recurrenceDays;
-    const index = current.indexOf(day);
-    if (index === -1) {
-      this.draft = { ...this.draft, recurrenceDays: [...current, day] };
-    } else {
-      this.draft = {
-        ...this.draft,
-        recurrenceDays: current.filter((d) => d !== day)
-      };
-    }
-  }
-
-  isRecurrenceDaySelected(day: RecurrenceDay): boolean {
-    return this.draft.recurrenceDays.includes(day);
-  }
-
-  setDraftCalendar(id: string | number): void {
-    this.draft = { ...this.draft, calendarId: +id };
-  }
-
-  saveDraft(): void {
-    if (!this.draft.title.trim()) {
-      return;
-    }
-
-    const startDate = this.parseDateString(this.draft.startDate);
-    const endDate = this.parseDateString(this.draft.endDate);
-
-    if (endDate < startDate) {
-      this.error.set('End date must be on or after the start date');
-      return;
-    }
-
-    const start = this.draft.isAllDay
-      ? this.combineDateAndTime(startDate, '00:00')
-      : this.combineDateAndTime(startDate, this.draft.startTime);
-    const end = this.draft.isAllDay
-      ? this.combineDateAndTime(endDate, '23:59')
-      : this.combineDateAndTime(endDate, this.draft.endTime);
-
-    if (this.draft.type === 'event') {
-      const isRecurring =
-        this.draft.isRecurring && this.draft.recurrenceDays.length > 0;
-
-      const recurrenceRule = isRecurring
-        ? this.buildRrule(this.draft.recurrenceDays, this.draft.recurrenceEndDate)
-        : null;
-
-      const dto: CreateEventDto = {
-        calendarId: this.draft.calendarId,
-        title: this.draft.title.trim(),
-        startTime: start.toISOString(),
-        endTime: end.toISOString(),
-        isAllDay: this.draft.isAllDay,
-        isRecurring,
-        recurrenceRule
-      };
-      this.isLoading.set(true);
-      this.eventService.createEvent(dto).subscribe({
-        next: (created) => {
-          this.items.update((current) => [...current, ...this.expandRecurring(created)]);
-          this.isComposerOpen = false;
-          this.isLoading.set(false);
-        },
-        error: (err: unknown) => {
-          this.error.set(err instanceof Error ? err.message : 'Failed to save event');
-          this.isLoading.set(false);
-        }
-      });
-    } else if (this.draft.type === 'task') {
-      const dto: CreatePlannerTaskDto = {
-        calendarId: this.draft.calendarId,
-        title: this.draft.title.trim(),
-        dueDate: start.toISOString()  // tasks still use startDate + startTime
-      };
-      this.isLoading.set(true);
-      this.taskService.createTask(dto).subscribe({
-        next: (created) => {
-          this.items.update((current) => [...current, this.mapTaskToCalendarItem(created)]);
-          this.isComposerOpen = false;
-          this.isLoading.set(false);
-        },
-        error: (err: unknown) => {
-          this.error.set(err instanceof Error ? err.message : 'Failed to save task');
-          this.isLoading.set(false);
-        }
-      });
-    } else {
-      this.items.update((current) => [
-        ...current,
-        {
-          id: `reminder-${Date.now()}`,
-          title: this.draft.title.trim(),
-          type: 'reminder' as const,
-          start
-        }
-      ]);
-      this.isComposerOpen = false;
-    }
-
-    this.error.set(null);
+  onComposerSaved(items: CalendarItem[]): void {
+    this.items.update((current) => [...current, ...items]);
   }
 
   openItem(event: MouseEvent, item: CalendarItem): void {
@@ -333,14 +207,10 @@ export class CalendarComponent implements OnInit {
       type: item.type,
       calendarId: item.calendarId ?? this.primaryCalendarId() ?? 0,
       isAllDay: item.isAllDay ?? false,
-      date: item.start,
       startDate,
       endDate,
       startTime: this.formatTimeHHMM(item.start),
-      endTime: this.formatTimeHHMM(item.end ?? item.start),
-      isRecurring: false,
-      recurrenceDays: [],
-      recurrenceEndDate: ''
+      endTime: this.formatTimeHHMM(item.end ?? item.start)
     };
     this.isItemDetailOpen = true;
   }
@@ -622,24 +492,6 @@ export class CalendarComponent implements OnInit {
     };
   }
 
-  private buildDraft(date: Date): DraftItem {
-    const dateStr = this.formatDateToYYYYMMDD(date);
-    return {
-      title: '',
-      type: 'event',
-      calendarId: this.primaryCalendarId() ?? 0,
-      date: new Date(date),
-      startDate: dateStr,
-      endDate: dateStr,
-      startTime: '09:00',
-      endTime: '10:00',
-      isAllDay: false,
-      isRecurring: false,
-      recurrenceDays: [],
-      recurrenceEndDate: ''
-    };
-  }
-
   private formatDateToYYYYMMDD(date: Date): string {
     const year = date.getFullYear();
     const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -648,20 +500,8 @@ export class CalendarComponent implements OnInit {
   }
 
   private parseDateString(dateStr: string): Date {
-    // Parse "YYYY-MM-DD" without timezone shifting (avoids UTC midnight offset)
     const [year, month, day] = dateStr.split('-').map((v) => Number.parseInt(v, 10));
     return new Date(year, month - 1, day);
-  }
-
-  private buildRrule(days: readonly RecurrenceDay[], endDate: string): string {
-    const byDay = days.join(',');
-    let rule = `FREQ=WEEKLY;BYDAY=${byDay}`;
-    if (endDate) {
-      // RRULE UNTIL format: YYYYMMDDTHHMMSSZ
-      const until = endDate.replace(/-/g, '') + 'T000000Z';
-      rule += `;UNTIL=${until}`;
-    }
-    return rule;
   }
 
   private combineDateAndTime(date: Date, time: string): Date {
