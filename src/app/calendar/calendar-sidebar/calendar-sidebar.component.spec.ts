@@ -12,6 +12,7 @@ const makeCalendar = (overrides: Partial<CalendarDto> = {}): CalendarDto => ({
   isVisible: true,
   isGoogleCalendar: false,
   userId: 'user-1',
+  color: null,
   events: [],
   tasks: [],
   ...overrides

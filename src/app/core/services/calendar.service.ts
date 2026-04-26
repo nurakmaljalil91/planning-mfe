@@ -1,6 +1,6 @@
 import { HttpClient, HttpParams } from '@angular/common/http';
-import { Injectable, inject } from '@angular/core';
-import { Observable, map } from 'rxjs';
+import { inject, Injectable } from '@angular/core';
+import { map, Observable } from 'rxjs';
 
 import { environment } from '../../../environments/environment';
 import {
@@ -8,6 +8,7 @@ import {
   CalendarDto,
   CalendarSubscriptionDto,
   CreateCalendarDto,
+  CreatePublicCalendarDto,
   PaginatedResult,
   PaginationParams,
   UpdateCalendarDto
@@ -19,22 +20,7 @@ export class CalendarService {
   private readonly baseUrl = `${environment.apiBaseUrl}/api/calendars`;
 
   getCalendars(params?: PaginationParams): Observable<PaginatedResult<CalendarDto>> {
-    let httpParams = new HttpParams();
-    if (params?.page != null) {
-      httpParams = httpParams.set('page', params.page.toString());
-    }
-    if (params?.total != null) {
-      httpParams = httpParams.set('total', params.total.toString());
-    }
-    if (params?.sortBy != null) {
-      httpParams = httpParams.set('sortBy', params.sortBy);
-    }
-    if (params?.descending != null) {
-      httpParams = httpParams.set('descending', params.descending.toString());
-    }
-    if (params?.filter != null) {
-      httpParams = httpParams.set('filter', params.filter);
-    }
+    const httpParams = this.buildPaginationParams(params);
 
     return this.http
       .get<BaseResponse<PaginatedResult<CalendarDto>>>(this.baseUrl, { params: httpParams })
@@ -67,8 +53,12 @@ export class CalendarService {
 
   getPublicCalendars(params?: PaginationParams): Observable<PaginatedResult<CalendarDto>> {
     let httpParams = new HttpParams();
-    if (params?.page != null) httpParams = httpParams.set('page', params.page.toString());
-    if (params?.total != null) httpParams = httpParams.set('total', params.total.toString());
+    if (params?.page !== null && params?.page !== undefined) {
+      httpParams = httpParams.set('page', params.page.toString());
+    }
+    if (params?.total !== null && params?.total !== undefined) {
+      httpParams = httpParams.set('total', params.total.toString());
+    }
     return this.http
       .get<BaseResponse<PaginatedResult<CalendarDto>>>(`${this.baseUrl}/public`, { params: httpParams })
       .pipe(map((response) => response.data));
@@ -104,9 +94,21 @@ export class CalendarService {
       .pipe(map((response) => response.data));
   }
 
-  createPublicCalendar(dto: CreateCalendarDto): Observable<CalendarDto> {
+  createPublicCalendar(dto: CreatePublicCalendarDto): Observable<CalendarDto> {
     return this.http
       .post<BaseResponse<CalendarDto>>(`${this.baseUrl}/public`, dto)
       .pipe(map((response) => response.data));
+  }
+
+  private buildPaginationParams(params?: PaginationParams): HttpParams {
+    let httpParams = new HttpParams();
+
+    for (const [key, value] of Object.entries(params ?? {})) {
+      if (value !== null && value !== undefined) {
+        httpParams = httpParams.set(key, value.toString());
+      }
+    }
+
+    return httpParams;
   }
 }

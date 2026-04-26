@@ -3,7 +3,7 @@ import { TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 
 import { environment } from '../../../environments/environment';
-import { CalendarDto, CalendarSubscriptionDto, BaseResponse, PaginatedResult } from '../models/planner.models';
+import { BaseResponse, CalendarDto, CalendarSubscriptionDto, PaginatedResult } from '../models/planner.models';
 import { CalendarService } from './calendar.service';
 
 const BASE_URL = `${environment.apiBaseUrl}/api/calendars`;
@@ -18,6 +18,7 @@ const mockCalendar: CalendarDto = {
   isVisible: true,
   isGoogleCalendar: false,
   userId: 'user-1',
+  color: null,
   events: [],
   tasks: []
 };
@@ -235,6 +236,27 @@ describe('CalendarService', () => {
       req.flush(makeSingleResponse({ ...mockSubscription, isVisible: false }));
 
       expect(result?.isVisible).toBe(false);
+    });
+  });
+
+  describe('createPublicCalendar', () => {
+    it('should POST /api/calendars/public and return the created public calendar', () => {
+      let result: CalendarDto | undefined;
+      const dto = {
+        description: 'Official Malaysia public holidays and observances.',
+        timeZone: 'Asia/Kuala_Lumpur',
+        title: 'Malaysia Holidays'
+      };
+
+      service.createPublicCalendar(dto).subscribe((r) => (result = r));
+
+      const req = httpController.expectOne(`${BASE_URL}/public`);
+      expect(req.request.method).toBe('POST');
+      expect(req.request.body).toEqual(dto);
+      req.flush(makeSingleResponse({ ...mockCalendar, ...dto, isPublic: true }));
+
+      expect(result?.title).toBe('Malaysia Holidays');
+      expect(result?.isPublic).toBe(true);
     });
   });
 });
