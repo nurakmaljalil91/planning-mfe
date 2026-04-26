@@ -1,11 +1,10 @@
-import { CommonModule } from '@angular/common';
 import {
   ChangeDetectionStrategy,
   Component,
   EventEmitter,
   Input,
   Output,
-  signal
+  signal,
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { CxsButtonComponent } from 'cerxos-ui';
@@ -17,16 +16,19 @@ const COLOR_PALETTE = ['#3b82f6', '#22c55e', '#a855f7', '#f97316', '#ec4899', '#
 /// Sidebar showing own calendars, subscriptions, and public calendar discovery.
 @Component({
   selector: 'app-calendar-sidebar',
-  imports: [CommonModule, FormsModule, CxsButtonComponent],
+  imports: [FormsModule, CxsButtonComponent],
   templateUrl: './calendar-sidebar.component.html',
-  changeDetection: ChangeDetectionStrategy.OnPush
+  changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class CalendarSidebarComponent {
   @Input() ownCalendars: CalendarDto[] = [];
   @Input() subscriptions: CalendarSubscriptionDto[] = [];
   @Input() publicCalendars: CalendarDto[] = [];
 
-  @Output() visibilityToggled = new EventEmitter<{ type: 'own' | 'subscription'; calendarId: number }>();
+  @Output() visibilityToggled = new EventEmitter<{
+    type: 'own' | 'subscription';
+    calendarId: number;
+  }>();
   @Output() calendarCreated = new EventEmitter<string>();
   @Output() calendarColorChanged = new EventEmitter<{ calendarId: number; color: string }>();
   @Output() subscribed = new EventEmitter<number>();
