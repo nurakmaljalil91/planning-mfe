@@ -33,7 +33,7 @@
     "@angular/router": "^21.2.10",
     "@softarc/native-federation-node": "^3.3.4",
     "@tailwindcss/postcss": "^4.2.4",
-    "cerxos-ui": "^0.0.14",
+    "cerxos-ui": "^0.0.15",
     "es-module-shims": "^1.5.12",
     "rxjs": "~7.8.0",
     "tailwindcss": "^4.2.4",
