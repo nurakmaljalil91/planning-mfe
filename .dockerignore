@@ -1,0 +1,8 @@
+node_modules
+dist
+.git
+.angular
+.idea
+.vscode
+tmp
+out-tsc
