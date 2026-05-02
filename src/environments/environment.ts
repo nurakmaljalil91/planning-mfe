@@ -1,4 +1,4 @@
 export const environment = {
   production: true,
-  apiBaseUrl: 'http://localhost:7059'
+  apiBaseUrl: '/api/planner',
 };
