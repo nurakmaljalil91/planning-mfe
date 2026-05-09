@@ -6,6 +6,7 @@ module.exports = withNativeFederation({
 
   exposes: {
     './Routes': './src/app/planning.routes.ts',
+    './UpcomingEventsWidget': './src/app/features/upcoming-events-widget/upcoming-events-widget.component.ts',
   },
 
   shared: {
