@@ -102,6 +102,17 @@ export class EventComposerComponent implements OnChanges {
     this.draft = { ...this.draft, calendarId: +id };
   }
 
+  setStartDate(date: string): void {
+    this.draft = { ...this.draft, startDate: date, endDate: date };
+    this.clearDateRangeError();
+  }
+
+  setEndDate(date: string): void {
+    const endDate = this.isDateBefore(date, this.draft.startDate) ? this.draft.startDate : date;
+    this.draft = { ...this.draft, endDate };
+    this.clearDateRangeError();
+  }
+
   close(): void {
     this.openChange.emit(false);
   }
@@ -309,6 +320,20 @@ export class EventComposerComponent implements OnChanges {
   private parseDateString(dateStr: string): Date {
     const [year, month, day] = dateStr.split('-').map((v) => Number.parseInt(v, 10));
     return new Date(year, month - 1, day);
+  }
+
+  private isDateBefore(date: string, compareDate: string): boolean {
+    if (!date || !compareDate) {
+      return false;
+    }
+
+    return date < compareDate;
+  }
+
+  private clearDateRangeError(): void {
+    if (this.error() === 'End date must be on or after the start date') {
+      this.error.set(null);
+    }
   }
 
   private combineDateAndTime(date: Date, time: string): Date {
