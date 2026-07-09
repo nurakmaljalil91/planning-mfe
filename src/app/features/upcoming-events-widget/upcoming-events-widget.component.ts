@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, OnInit, ViewEncapsulation, inject, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { forkJoin } from 'rxjs';
 import { CxsCardComponent } from 'cerxos-ui';
@@ -19,7 +19,12 @@ interface UpcomingItem {
   standalone: true,
   imports: [RouterLink, CxsCardComponent],
   templateUrl: './upcoming-events-widget.component.html',
-  styleUrl: './upcoming-events-widget.component.css',
+  // Shadow DOM isolates the widget from the host shell's stylesheet, so it needs its
+  // own copy of the global Tailwind build alongside its component-specific overrides.
+  // Without this, embedding the widget in the shell (or any other host) pollutes the
+  // host's cascade layers and can silently break unrelated host styles.
+  styleUrls: ['../../../styles.css', './upcoming-events-widget.component.css'],
+  encapsulation: ViewEncapsulation.ShadowDom,
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class UpcomingEventsWidgetComponent implements OnInit {
