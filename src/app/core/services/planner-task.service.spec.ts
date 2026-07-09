@@ -92,6 +92,21 @@ describe('PlannerTaskService', () => {
       req.flush(makePaginatedResponse([]));
     });
 
+    it('should include visible range params when provided', () => {
+      service.getTasks(undefined, {
+        rangeStart: '2026-07-01T00:00:00.000Z',
+        rangeEnd: '2026-08-01T00:00:00.000Z'
+      }).subscribe();
+
+      const req = httpController.expectOne(
+        (r) =>
+          r.url === BASE_URL &&
+          r.params.get('rangeStart') === '2026-07-01T00:00:00.000Z' &&
+          r.params.get('rangeEnd') === '2026-08-01T00:00:00.000Z'
+      );
+      req.flush(makePaginatedResponse([]));
+    });
+
     it('should return empty items when no tasks exist', () => {
       let result: PaginatedResult<PlannerTaskDto> | undefined;
 

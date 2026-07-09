@@ -47,6 +47,11 @@ interface EditDraft {
   endTime: string;
 }
 
+interface VisibleRange {
+  start: Date;
+  end: Date;
+}
+
 @Component({
   selector: 'app-calendar',
   imports: [CommonModule, FormsModule, CxsButtonComponent, CxsDialogComponent, CalendarSidebarComponent, EventComposerComponent],
@@ -149,39 +154,37 @@ export class CalendarComponent implements OnInit {
   setView(mode: CalendarView): void {
     this.viewMode = mode;
     this.isComposerOpen = false;
+    this.loadCalendarItems();
   }
 
   goToday(): void {
     this.currentDate = this.startOfDay(new Date());
     this.selectedDate = this.currentDate;
+    this.loadCalendarItems();
   }
 
   prev(): void {
     if (this.viewMode === 'month') {
       this.currentDate = new Date(this.currentDate.getFullYear(), this.currentDate.getMonth() - 1, 1);
-      return;
-    }
-
-    if (this.viewMode === 'week') {
+    } else if (this.viewMode === 'week') {
       this.currentDate = this.addDays(this.currentDate, -7);
-      return;
+    } else {
+      this.currentDate = this.addDays(this.currentDate, -1);
     }
 
-    this.currentDate = this.addDays(this.currentDate, -1);
+    this.loadCalendarItems();
   }
 
   next(): void {
     if (this.viewMode === 'month') {
       this.currentDate = new Date(this.currentDate.getFullYear(), this.currentDate.getMonth() + 1, 1);
-      return;
-    }
-
-    if (this.viewMode === 'week') {
+    } else if (this.viewMode === 'week') {
       this.currentDate = this.addDays(this.currentDate, 7);
-      return;
+    } else {
+      this.currentDate = this.addDays(this.currentDate, 1);
     }
 
-    this.currentDate = this.addDays(this.currentDate, 1);
+    this.loadCalendarItems();
   }
 
   openComposer(date?: Date): void {
@@ -237,7 +240,7 @@ export class CalendarComponent implements OnInit {
         const baseId = `event-${updated.id}`;
         this.items.update((current) => [
           ...current.filter((i) => !i.id.startsWith(baseId)),
-          ...this.expandRecurring(updated)
+          ...this.expandRecurring(updated, this.getVisibleRange())
         ]);
         this.isItemDetailOpen = false;
         this.isLoading.set(false);
@@ -434,14 +437,25 @@ export class CalendarComponent implements OnInit {
   }
 
   private loadCalendarItems(): void {
+    const visibleRange = this.getVisibleRange();
+    const rangeParams = {
+      page: 1,
+      total: 500,
+      rangeStart: visibleRange.start.toISOString(),
+      rangeEnd: visibleRange.end.toISOString()
+    };
+
+    this.isLoading.set(true);
+    this.error.set(null);
+
     forkJoin({
-      events: this.eventService.getEvents(undefined, { page: 1, total: 200 }),
-      tasks: this.taskService.getTasks(undefined, { page: 1, total: 200 })
+      events: this.eventService.getEvents(undefined, rangeParams),
+      tasks: this.taskService.getTasks(undefined, rangeParams)
     }).subscribe({
       next: ({ events, tasks }) => {
         const eventList = events?.items ?? [];
         const taskList = tasks?.items ?? [];
-        const eventItems = eventList.flatMap((e) => this.expandRecurring(e));
+        const eventItems = eventList.flatMap((e) => this.expandRecurring(e, visibleRange));
         const taskItems = taskList.map((t) => this.mapTaskToCalendarItem(t));
         const reminderItems = eventList.flatMap((e) =>
           (e.reminders ?? []).map((r) => this.mapReminderToCalendarItem(r))
@@ -454,6 +468,31 @@ export class CalendarComponent implements OnInit {
         this.isLoading.set(false);
       }
     });
+  }
+
+  private getVisibleRange(): VisibleRange {
+    if (this.viewMode === 'month') {
+      const first = new Date(this.currentDate.getFullYear(), this.currentDate.getMonth(), 1);
+      const start = this.startOfWeek(first);
+      return {
+        start,
+        end: this.addDays(start, 42)
+      };
+    }
+
+    if (this.viewMode === 'week') {
+      const start = this.startOfWeek(this.currentDate);
+      return {
+        start,
+        end: this.addDays(start, 7)
+      };
+    }
+
+    const start = this.startOfDay(this.currentDate);
+    return {
+      start,
+      end: this.addDays(start, 1)
+    };
   }
 
   private mapEventToCalendarItem(event: EventDto): CalendarItem {
@@ -553,7 +592,7 @@ export class CalendarComponent implements OnInit {
     return d >= s && d <= e;
   }
 
-  private expandRecurring(event: EventDto): CalendarItem[] {
+  private expandRecurring(event: EventDto, visibleRange?: VisibleRange): CalendarItem[] {
     if (!event.isRecurring || !event.recurrenceRule) {
       return [this.mapEventToCalendarItem(event)];
     }
@@ -589,19 +628,23 @@ export class CalendarComponent implements OnInit {
       untilDate = new Date(Date.UTC(year, month, day));
     }
 
-    // Expansion window: from event start up to min(UNTIL, today + 365 days)
-    const today = new Date();
-    const maxDate = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 365);
-    const windowEnd = untilDate && untilDate < maxDate ? untilDate : maxDate;
-
     const eventStart = new Date(event.startTime);
     const eventEnd = new Date(event.endTime);
     const durationMs = eventEnd.getTime() - eventStart.getTime();
+    const fallbackEnd = this.addDays(this.startOfDay(new Date()), 365);
+    const windowStart = visibleRange
+      ? this.maxDate(this.startOfDay(eventStart), this.startOfDay(visibleRange.start))
+      : this.startOfDay(eventStart);
+    const windowEnd = visibleRange ? visibleRange.end : fallbackEnd;
 
     const items: CalendarItem[] = [];
-    const cursor = this.startOfDay(eventStart);
+    const cursor = this.startOfDay(windowStart);
 
-    while (cursor <= windowEnd) {
+    while (cursor < windowEnd) {
+      if (untilDate && cursor > untilDate) {
+        break;
+      }
+
       if (targetDays.has(cursor.getDay())) {
         const occurrenceStart = new Date(
           cursor.getFullYear(),
@@ -628,5 +671,9 @@ export class CalendarComponent implements OnInit {
     }
 
     return items.length > 0 ? items : [this.mapEventToCalendarItem(event)];
+  }
+
+  private maxDate(first: Date, second: Date): Date {
+    return first > second ? first : second;
   }
 }

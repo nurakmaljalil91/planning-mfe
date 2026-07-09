@@ -37,6 +37,12 @@ export class EventService {
     if (params?.filter != null) {
       httpParams = httpParams.set('filter', params.filter);
     }
+    if (params?.rangeStart != null) {
+      httpParams = httpParams.set('rangeStart', params.rangeStart);
+    }
+    if (params?.rangeEnd != null) {
+      httpParams = httpParams.set('rangeEnd', params.rangeEnd);
+    }
 
     return this.http
       .get<BaseResponse<PaginatedResult<EventDto>>>(this.baseUrl, { params: httpParams })

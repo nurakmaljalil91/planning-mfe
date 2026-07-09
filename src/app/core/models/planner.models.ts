@@ -20,6 +20,8 @@ export interface PaginationParams {
   sortBy?: string;
   descending?: boolean;
   filter?: string;
+  rangeStart?: string;
+  rangeEnd?: string;
 }
 
 export enum PriorityLevel {
