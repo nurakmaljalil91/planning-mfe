@@ -6,11 +6,13 @@ import {
   CalendarSubscriptionDto,
   EventDto,
   PaginatedResult,
-  PlannerTaskDto
+  PlannerTaskDto,
+  ReminderDto
 } from '../core/models/planner.models';
 import { CalendarService } from '../core/services/calendar.service';
 import { EventService } from '../core/services/event.service';
 import { PlannerTaskService } from '../core/services/planner-task.service';
+import { ReminderService } from '../core/services/reminder.service';
 import { CalendarComponent } from './calendar.component';
 
 const makeCalendar = (overrides: Partial<CalendarDto> = {}): CalendarDto => ({
@@ -59,6 +61,7 @@ describe('CalendarComponent', () => {
   let calendarService: jasmine.SpyObj<CalendarService>;
   let eventService: jasmine.SpyObj<EventService>;
   let taskService: jasmine.SpyObj<PlannerTaskService>;
+  let reminderService: jasmine.SpyObj<ReminderService>;
 
   beforeEach(async () => {
     calendarService = jasmine.createSpyObj<CalendarService>('CalendarService', [
@@ -78,19 +81,22 @@ describe('CalendarComponent', () => {
       'deleteEvent'
     ]);
     taskService = jasmine.createSpyObj<PlannerTaskService>('PlannerTaskService', ['getTasks']);
+    reminderService = jasmine.createSpyObj<ReminderService>('ReminderService', ['getReminders']);
 
     calendarService.getCalendars.and.returnValue(of(makePaginatedResult([makeCalendar()])));
     calendarService.getUserSubscriptions.and.returnValue(of([] as CalendarSubscriptionDto[]));
     calendarService.getPublicCalendars.and.returnValue(of(makePaginatedResult([])));
     eventService.getEvents.and.returnValue(of(makePaginatedResult([] as EventDto[])));
     taskService.getTasks.and.returnValue(of(makePaginatedResult([] as PlannerTaskDto[])));
+    reminderService.getReminders.and.returnValue(of(makePaginatedResult([] as ReminderDto[])));
 
     await TestBed.configureTestingModule({
       imports: [CalendarComponent],
       providers: [
         { provide: CalendarService, useValue: calendarService },
         { provide: EventService, useValue: eventService },
-        { provide: PlannerTaskService, useValue: taskService }
+        { provide: PlannerTaskService, useValue: taskService },
+        { provide: ReminderService, useValue: reminderService }
       ]
     }).compileComponents();
 
@@ -156,5 +162,33 @@ describe('CalendarComponent', () => {
     expect(items.length).toBeGreaterThan(0);
     expect(items.every((item) => item.start >= visibleStart && item.start < visibleEnd)).toBeTrue();
     expect(items.every((item) => item.title === 'Weekly Sync')).toBeTrue();
+  });
+
+  it('loads a persisted reminder with its parent calendar and hides it with that calendar', () => {
+    component.currentDate = new Date(2026, 6, 15);
+    calendarService.getCalendars.and.returnValue(of(makePaginatedResult([
+      makeCalendar(), makeCalendar({ id: 2, title: 'Work', isPrimary: false })
+    ])));
+    eventService.getEvents.and.returnValue(of(makePaginatedResult([
+      makeEvent({ id: 23, calendarId: 2, startTime: '2026-07-15T12:00:00.000Z' })
+    ])));
+    reminderService.getReminders.and.returnValue(of(makePaginatedResult([{
+      id: 45,
+      eventId: 23,
+      title: 'Prepare notes',
+      reminderDateTime: '2026-07-15T11:00:00.000Z',
+      isSent: false
+    }])));
+
+    fixture.detectChanges();
+
+    const reminder = component.items().find((item) => item.id === 'reminder-45');
+    expect(reminder?.calendarId).toBe(2);
+    expect(component.itemsForDate(new Date(2026, 6, 15)).some((item) => item.id === 'reminder-45')).toBeTrue();
+
+    component.ownCalendars.update((calendars) => calendars.map((calendar) =>
+      calendar.id === 2 ? { ...calendar, isVisible: false } : calendar
+    ));
+    expect(component.itemsForDate(new Date(2026, 6, 15)).some((item) => item.id === 'reminder-45')).toBeFalse();
   });
 });

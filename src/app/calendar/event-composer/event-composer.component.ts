@@ -15,6 +15,7 @@ import { CxsButtonComponent, CxsDialogComponent, CxsInputComponent, CxsSelectCom
 
 import { EventService } from '../../core/services/event.service';
 import { PlannerTaskService } from '../../core/services/planner-task.service';
+import { ReminderService } from '../../core/services/reminder.service';
 import {
   CalendarDto,
   CreateEventDto,
@@ -30,6 +31,7 @@ interface DraftItem {
   title: string;
   type: CalendarItemType;
   calendarId: number;
+  eventId: number | null;
   date: Date;
   startDate: string;
   endDate: string;
@@ -51,12 +53,14 @@ interface DraftItem {
 export class EventComposerComponent implements OnChanges {
   private readonly eventService = inject(EventService);
   private readonly taskService = inject(PlannerTaskService);
+  private readonly reminderService = inject(ReminderService);
 
   @Input() open = false;
   @Output() openChange = new EventEmitter<boolean>();
 
   @Input() selectedDate: Date = new Date();
   @Input() calendars: CalendarDto[] = [];
+  @Input() events: EventDto[] = [];
   @Input() calendarColorMap: Map<number, string> = new Map();
   @Input() primaryCalendarId: number | null = null;
 
@@ -99,7 +103,15 @@ export class EventComposerComponent implements OnChanges {
   }
 
   setDraftCalendar(id: string | number): void {
-    this.draft = { ...this.draft, calendarId: +id };
+    this.draft = { ...this.draft, calendarId: +id, eventId: null };
+  }
+
+  get reminderEvents(): EventDto[] {
+    return this.events.filter((event) => event.calendarId === this.draft.calendarId);
+  }
+
+  setReminderEvent(id: string | number): void {
+    this.draft = { ...this.draft, eventId: id ? +id : null };
   }
 
   setStartDate(date: string): void {
@@ -121,6 +133,7 @@ export class EventComposerComponent implements OnChanges {
     if (!this.draft.title.trim()) {
       return;
     }
+    this.error.set(null);
 
     const startDate = this.parseDateString(this.draft.startDate);
     const endDate = this.parseDateString(this.draft.endDate);
@@ -183,16 +196,34 @@ export class EventComposerComponent implements OnChanges {
         }
       });
     } else {
-      this.saved.emit([{
-        id: `reminder-${Date.now()}`,
+      const parent = this.reminderEvents.find((event) => event.id === this.draft.eventId);
+      if (!parent) {
+        this.error.set('Choose an event before saving a reminder.');
+        return;
+      }
+      this.isLoading.set(true);
+      this.reminderService.createReminder({
+        eventId: parent.id,
         title: this.draft.title.trim(),
-        type: 'reminder' as const,
-        start
-      }]);
-      this.openChange.emit(false);
+        reminderDateTime: start.toISOString()
+      }).subscribe({
+        next: (created) => {
+          this.saved.emit([{
+            id: `reminder-${created.id}`,
+            title: created.title,
+            type: 'reminder',
+            start: new Date(created.reminderDateTime),
+            calendarId: parent.calendarId
+          }]);
+          this.openChange.emit(false);
+          this.isLoading.set(false);
+        },
+        error: (err: unknown) => {
+          this.error.set(err instanceof Error ? err.message : 'Failed to save reminder');
+          this.isLoading.set(false);
+        }
+      });
     }
-
-    this.error.set(null);
   }
 
   private buildDraft(date: Date): DraftItem {
@@ -201,6 +232,7 @@ export class EventComposerComponent implements OnChanges {
       title: '',
       type: 'event',
       calendarId: this.primaryCalendarId ?? 0,
+      eventId: null,
       date: new Date(date),
       startDate: dateStr,
       endDate: dateStr,

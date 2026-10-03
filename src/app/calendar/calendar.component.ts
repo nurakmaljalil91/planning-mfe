@@ -9,11 +9,12 @@ import {
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { CxsButtonComponent, CxsDialogComponent } from 'cerxos-ui';
-import { forkJoin } from 'rxjs';
+import { forkJoin, map, of, switchMap } from 'rxjs';
 
 import { CalendarService } from '../core/services/calendar.service';
 import { EventService } from '../core/services/event.service';
 import { PlannerTaskService } from '../core/services/planner-task.service';
+import { ReminderService } from '../core/services/reminder.service';
 import {
   CalendarDto,
   CalendarSubscriptionDto,
@@ -63,6 +64,7 @@ export class CalendarComponent implements OnInit {
   private readonly calendarService = inject(CalendarService);
   private readonly eventService = inject(EventService);
   private readonly taskService = inject(PlannerTaskService);
+  private readonly reminderService = inject(ReminderService);
 
   readonly isLoading = signal(false);
   readonly error = signal<string | null>(null);
@@ -71,6 +73,7 @@ export class CalendarComponent implements OnInit {
   readonly ownCalendars = signal<CalendarDto[]>([]);
   readonly subscriptions = signal<CalendarSubscriptionDto[]>([]);
   readonly publicCalendars = signal<CalendarDto[]>([]);
+  readonly availableEvents = signal<EventDto[]>([]);
 
   readonly selectedItem = signal<CalendarItem | null>(null);
 
@@ -195,6 +198,7 @@ export class CalendarComponent implements OnInit {
 
   onComposerSaved(items: CalendarItem[]): void {
     this.items.update((current) => [...current, ...items]);
+    this.loadCalendarItems();
   }
 
   openItem(event: MouseEvent, item: CalendarItem): void {
@@ -450,16 +454,36 @@ export class CalendarComponent implements OnInit {
 
     forkJoin({
       events: this.eventService.getEvents(undefined, rangeParams),
-      tasks: this.taskService.getTasks(undefined, rangeParams)
-    }).subscribe({
-      next: ({ events, tasks }) => {
+      tasks: this.taskService.getTasks(undefined, rangeParams),
+      reminders: this.reminderService.getReminders(undefined, { page: 1, total: 500 })
+    }).pipe(
+      switchMap((result) => {
+        const eventIds = new Set(result.events.items.map((event) => event.id));
+        const visibleReminders = result.reminders.items.filter((reminder) => {
+          const date = new Date(reminder.reminderDateTime);
+          return date >= visibleRange.start && date < visibleRange.end;
+        });
+        const missingIds = [...new Set(visibleReminders.map((reminder) => reminder.eventId))]
+          .filter((id) => !eventIds.has(id));
+        const parents = missingIds.length
+          ? forkJoin(missingIds.map((id) => this.eventService.getEventById(id)))
+          : of([] as EventDto[]);
+        return parents.pipe(map((extraEvents) => ({ ...result, visibleReminders, extraEvents })));
+      })
+    ).subscribe({
+      next: ({ events, tasks, visibleReminders, extraEvents }) => {
         const eventList = events?.items ?? [];
         const taskList = tasks?.items ?? [];
+        this.availableEvents.set(eventList.filter((event) =>
+          this.ownCalendars().some((calendar) => calendar.id === event.calendarId)
+        ));
         const eventItems = eventList.flatMap((e) => this.expandRecurring(e, visibleRange));
         const taskItems = taskList.map((t) => this.mapTaskToCalendarItem(t));
-        const reminderItems = eventList.flatMap((e) =>
-          (e.reminders ?? []).map((r) => this.mapReminderToCalendarItem(r))
-        );
+        const parentById = new Map([...eventList, ...extraEvents].map((event) => [event.id, event]));
+        const reminderItems = visibleReminders.flatMap((reminder) => {
+          const parent = parentById.get(reminder.eventId);
+          return parent ? [this.mapReminderToCalendarItem(reminder, parent.calendarId)] : [];
+        });
         this.items.set([...eventItems, ...taskItems, ...reminderItems]);
         this.isLoading.set(false);
       },
@@ -522,12 +546,13 @@ export class CalendarComponent implements OnInit {
     };
   }
 
-  private mapReminderToCalendarItem(reminder: ReminderDto): CalendarItem {
+  private mapReminderToCalendarItem(reminder: ReminderDto, calendarId: number): CalendarItem {
     return {
       id: `reminder-${reminder.id}`,
       title: reminder.title,
       type: 'reminder',
-      start: new Date(reminder.reminderDateTime)
+      start: new Date(reminder.reminderDateTime),
+      calendarId
     };
   }
 

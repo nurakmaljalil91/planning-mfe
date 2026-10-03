@@ -21,6 +21,19 @@
       </cxs-select>
     </div>
 
+    @if (draft.type === 'reminder') {
+      @if (reminderEvents.length) {
+        <cxs-select label="Event" [ngModel]="draft.eventId ?? ''" (ngModelChange)="setReminderEvent($event)">
+          <option value="">Choose an event</option>
+          @for (event of reminderEvents; track event.id) {
+            <option [value]="event.id">{{ event.title }}</option>
+          }
+        </cxs-select>
+      } @else {
+        <p class="text-sm text-(--cxs-color-on-surface-muted)">Create an event in this calendar before adding a reminder.</p>
+      }
+    }
+
     <!-- Calendar selector -->
     <div class="flex flex-col gap-1.5">
       <span class="text-sm font-medium text-(--cxs-color-on-surface)">Calendar</span>
@@ -80,6 +93,7 @@
       </div>
 
       <!-- End -->
+      @if (draft.type === 'event') {
       <div class="flex flex-col gap-1.5">
         <span class="text-[0.85rem] text-(--cxs-color-on-surface-muted)">
           {{ draft.type === 'event' && draft.isAllDay ? 'End date' : 'End' }}
@@ -101,6 +115,7 @@
           }
         </div>
       </div>
+      }
     </div>
 
     <!-- Recurring controls — events only -->
