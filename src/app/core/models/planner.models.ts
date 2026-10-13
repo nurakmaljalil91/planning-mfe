@@ -1,11 +1,11 @@
-export interface BaseResponse<T> {
+export type BaseResponse<T> = {
   success: boolean;
   message: string | null;
   data: T;
   errors: Record<string, string[]> | null;
 }
 
-export interface PaginatedResult<T> {
+export type PaginatedResult<T> = {
   items: T[];
   pageNumber: number;
   totalPages: number;
@@ -14,7 +14,7 @@ export interface PaginatedResult<T> {
   hasNextPage: boolean;
 }
 
-export interface PaginationParams {
+export type PaginationParams = {
   page?: number;
   total?: number;
   sortBy?: string;
@@ -31,7 +31,7 @@ export enum PriorityLevel {
   High = 3
 }
 
-export interface ReminderDto {
+export type ReminderDto = {
   id: number;
   eventId: number;
   title: string;
@@ -39,7 +39,7 @@ export interface ReminderDto {
   isSent: boolean;
 }
 
-export interface EventDto {
+export type EventDto = {
   id: number;
   calendarId: number;
   title: string;
@@ -53,7 +53,7 @@ export interface EventDto {
   reminders: ReminderDto[];
 }
 
-export interface PlannerTaskDto {
+export type PlannerTaskDto = {
   id: number;
   calendarId: number;
   title: string;
@@ -64,7 +64,7 @@ export interface PlannerTaskDto {
   isCompleted: boolean;
 }
 
-export interface CalendarDto {
+export type CalendarDto = {
   id: number;
   title: string;
   description: string | null;
@@ -79,7 +79,7 @@ export interface CalendarDto {
   tasks: PlannerTaskDto[];
 }
 
-export interface CalendarSubscriptionDto {
+export type CalendarSubscriptionDto = {
   id: number;
   userId: string;
   calendarId: number;
@@ -87,7 +87,7 @@ export interface CalendarSubscriptionDto {
   calendar: CalendarDto | null;
 }
 
-export interface CreateEventDto {
+export type CreateEventDto = {
   calendarId: number;
   title: string;
   description?: string | null;
@@ -99,7 +99,7 @@ export interface CreateEventDto {
   recurrenceRule?: string | null;
 }
 
-export interface UpdateEventDto {
+export type UpdateEventDto = {
   title?: string;
   description?: string | null;
   startTime?: string;
@@ -110,7 +110,7 @@ export interface UpdateEventDto {
   recurrenceRule?: string | null;
 }
 
-export interface CreatePlannerTaskDto {
+export type CreatePlannerTaskDto = {
   calendarId: number;
   title: string;
   note?: string | null;
@@ -119,7 +119,7 @@ export interface CreatePlannerTaskDto {
   reminder?: string | null;
 }
 
-export interface UpdatePlannerTaskDto {
+export type UpdatePlannerTaskDto = {
   title?: string;
   note?: string | null;
   priority?: 0 | 1 | 2 | 3;
@@ -127,34 +127,34 @@ export interface UpdatePlannerTaskDto {
   reminder?: string | null;
 }
 
-export interface CreateCalendarDto {
+export type CreateCalendarDto = {
   title: string;
   description?: string | null;
   timeZone?: string | null;
   isPrimary?: boolean;
 }
 
-export interface CreatePublicCalendarDto {
+export type CreatePublicCalendarDto = {
   title: string;
   description?: string | null;
   timeZone?: string | null;
   isPrimary?: boolean;
 }
 
-export interface UpdateCalendarDto {
+export type UpdateCalendarDto = {
   title?: string;
   description?: string | null;
   timeZone?: string | null;
   color?: string | null;
 }
 
-export interface CreateReminderDto {
+export type CreateReminderDto = {
   eventId: number;
   title: string;
   reminderDateTime: string;
 }
 
-export interface UpdateReminderDto {
+export type UpdateReminderDto = {
   title?: string;
   reminderDateTime?: string;
 }

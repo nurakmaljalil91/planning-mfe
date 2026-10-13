@@ -1,6 +1,6 @@
-import { HttpClient, HttpParams } from '@angular/common/http';
-import { Injectable, inject } from '@angular/core';
-import { Observable, map } from 'rxjs';
+import { HttpClient } from '@angular/common/http';
+import { inject, Injectable } from '@angular/core';
+import { map, Observable } from 'rxjs';
 
 import { environment } from '../../../environments/environment';
 import {
@@ -11,6 +11,7 @@ import {
   PlannerTaskDto,
   UpdatePlannerTaskDto
 } from '../models/planner.models';
+import { toHttpParams } from './http-params';
 
 @Injectable({ providedIn: 'root' })
 export class PlannerTaskService {
@@ -21,31 +22,7 @@ export class PlannerTaskService {
     calendarId?: number,
     params?: PaginationParams
   ): Observable<PaginatedResult<PlannerTaskDto>> {
-    let httpParams = new HttpParams();
-    if (calendarId != null) {
-      httpParams = httpParams.set('calendarId', calendarId.toString());
-    }
-    if (params?.page != null) {
-      httpParams = httpParams.set('page', params.page.toString());
-    }
-    if (params?.total != null) {
-      httpParams = httpParams.set('total', params.total.toString());
-    }
-    if (params?.sortBy != null) {
-      httpParams = httpParams.set('sortBy', params.sortBy);
-    }
-    if (params?.descending != null) {
-      httpParams = httpParams.set('descending', params.descending.toString());
-    }
-    if (params?.filter != null) {
-      httpParams = httpParams.set('filter', params.filter);
-    }
-    if (params?.rangeStart != null) {
-      httpParams = httpParams.set('rangeStart', params.rangeStart);
-    }
-    if (params?.rangeEnd != null) {
-      httpParams = httpParams.set('rangeEnd', params.rangeEnd);
-    }
+    const httpParams = toHttpParams({ calendarId, ...params });
 
     return this.http
       .get<BaseResponse<PaginatedResult<PlannerTaskDto>>>(this.baseUrl, { params: httpParams })

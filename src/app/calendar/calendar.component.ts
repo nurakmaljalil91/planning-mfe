@@ -1,10 +1,12 @@
+// TODO: Split this component into smaller pieces.
+/* eslint-disable max-lines */
 import { CommonModule } from '@angular/common';
 import {
   ChangeDetectionStrategy,
   Component,
-  OnInit,
   computed,
   inject,
+  OnInit,
   signal
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
@@ -29,13 +31,13 @@ import { EventComposerComponent } from './event-composer/event-composer.componen
 
 type CalendarView = 'month' | 'week' | 'day';
 
-interface CalendarDay {
+type CalendarDay = {
   date: Date;
   inMonth: boolean;
   items: CalendarItem[];
 }
 
-interface EditDraft {
+type EditDraft = {
   itemId: string;
   eventId: number | null;
   title: string;
@@ -48,7 +50,7 @@ interface EditDraft {
   endTime: string;
 }
 
-interface VisibleRange {
+type VisibleRange = {
   start: Date;
   end: Date;
 }
@@ -96,7 +98,7 @@ export class CalendarComponent implements OnInit {
   viewMode: CalendarView = 'month';
   currentDate = this.startOfDay(new Date());
   selectedDate = this.startOfDay(new Date());
-  items = signal<CalendarItem[]>([]);
+  readonly items = signal<CalendarItem[]>([]);
   isComposerOpen = false;
   isItemDetailOpen = false;
   editDraft: EditDraft | null = null;
@@ -201,7 +203,7 @@ export class CalendarComponent implements OnInit {
     this.loadCalendarItems();
   }
 
-  openItem(event: MouseEvent, item: CalendarItem): void {
+  openItem(event: Event, item: CalendarItem): void {
     event.stopPropagation();
     this.selectedItem.set(item);
     const eventId = item.id.startsWith('event-') ? parseInt(item.id.split('-')[1], 10) : null;
@@ -223,7 +225,9 @@ export class CalendarComponent implements OnInit {
   }
 
   saveEdit(): void {
-    if (!this.editDraft || !this.editDraft.eventId) return;
+    if (!this.editDraft || !this.editDraft.eventId) {
+      return;
+    }
     const startDate = this.parseDateString(this.editDraft.startDate);
     const endDate = this.parseDateString(this.editDraft.endDate);
     if (endDate < startDate) {
@@ -283,7 +287,7 @@ export class CalendarComponent implements OnInit {
     return this.items().filter(
       (item) =>
         this.isDateInRange(item.start, item.end ?? item.start, date) &&
-        (item.calendarId == null || visible.has(item.calendarId))
+        (item.calendarId === null || item.calendarId === undefined || visible.has(item.calendarId))
     );
   }
 
@@ -293,7 +297,7 @@ export class CalendarComponent implements OnInit {
       (item) =>
         item.isAllDay &&
         this.isDateInRange(item.start, item.end ?? item.start, date) &&
-        (item.calendarId == null || visible.has(item.calendarId))
+        (item.calendarId === null || item.calendarId === undefined || visible.has(item.calendarId))
     );
   }
 
@@ -304,7 +308,7 @@ export class CalendarComponent implements OnInit {
         !item.isAllDay &&
         this.isSameDay(item.start, date) &&
         item.start.getHours() === hour &&
-        (item.calendarId == null || visible.has(item.calendarId))
+        (item.calendarId === null || item.calendarId === undefined || visible.has(item.calendarId))
     );
   }
 
@@ -361,7 +365,9 @@ export class CalendarComponent implements OnInit {
   }
 
   calendarColor(item: CalendarItem): string {
-    if (item.calendarId == null) return 'var(--cxs-color-primary)';
+    if (item.calendarId === null || item.calendarId === undefined) {
+      return 'var(--cxs-color-primary)';
+    }
     return this.calendarColorMap().get(item.calendarId) ?? 'var(--cxs-color-primary)';
   }
 
@@ -535,7 +541,7 @@ export class CalendarComponent implements OnInit {
 
   private mapTaskToCalendarItem(task: PlannerTaskDto): CalendarItem {
     const startRaw = task.dueDate ?? task.reminder;
-    const start = startRaw != null ? new Date(startRaw) : new Date();
+    const start = startRaw !== null && startRaw !== undefined ? new Date(startRaw) : new Date();
     return {
       id: `task-${task.id}`,
       title: task.title,

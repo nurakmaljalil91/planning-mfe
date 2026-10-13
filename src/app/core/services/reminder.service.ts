@@ -1,6 +1,6 @@
-import { HttpClient, HttpParams } from '@angular/common/http';
-import { Injectable, inject } from '@angular/core';
-import { Observable, map } from 'rxjs';
+import { HttpClient } from '@angular/common/http';
+import { inject, Injectable } from '@angular/core';
+import { map, Observable } from 'rxjs';
 
 import { environment } from '../../../environments/environment';
 import {
@@ -11,6 +11,7 @@ import {
   ReminderDto,
   UpdateReminderDto
 } from '../models/planner.models';
+import { toHttpParams } from './http-params';
 
 @Injectable({ providedIn: 'root' })
 export class ReminderService {
@@ -21,25 +22,14 @@ export class ReminderService {
     eventId?: number,
     params?: PaginationParams
   ): Observable<PaginatedResult<ReminderDto>> {
-    let httpParams = new HttpParams();
-    if (eventId != null) {
-      httpParams = httpParams.set('eventId', eventId.toString());
-    }
-    if (params?.page != null) {
-      httpParams = httpParams.set('page', params.page.toString());
-    }
-    if (params?.total != null) {
-      httpParams = httpParams.set('total', params.total.toString());
-    }
-    if (params?.sortBy != null) {
-      httpParams = httpParams.set('sortBy', params.sortBy);
-    }
-    if (params?.descending != null) {
-      httpParams = httpParams.set('descending', params.descending.toString());
-    }
-    if (params?.filter != null) {
-      httpParams = httpParams.set('filter', params.filter);
-    }
+    const httpParams = toHttpParams({
+      eventId,
+      page: params?.page,
+      total: params?.total,
+      sortBy: params?.sortBy,
+      descending: params?.descending,
+      filter: params?.filter,
+    });
 
     return this.http
       .get<BaseResponse<PaginatedResult<ReminderDto>>>(this.baseUrl, { params: httpParams })

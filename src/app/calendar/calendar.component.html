@@ -60,13 +60,13 @@
     <aside class="w-64 shrink-0 border-r border-(--cxs-color-border) pr-4 overflow-y-auto">
       <app-calendar-sidebar
         [ownCalendars]="ownCalendars()"
-        [subscriptions]="subscriptions()"
         [publicCalendars]="publicCalendars()"
-        (visibilityToggled)="onVisibilityToggled($event)"
-        (calendarCreated)="onCalendarCreated($event)"
+        [subscriptions]="subscriptions()"
         (calendarColorChanged)="onCalendarColorChanged($event)"
+        (calendarCreated)="onCalendarCreated($event)"
         (subscribed)="onSubscribed($event)"
         (unsubscribed)="onUnsubscribed($event)"
+        (visibilityToggled)="onVisibilityToggled($event)"
       />
     </aside>
 
@@ -105,7 +105,10 @@
                   @for (item of day.items | slice: 0:3; track trackByItem($index, item)) {
                     <span
                       class="inline-flex cursor-pointer items-center gap-1.5 rounded-full bg-(--cxs-color-surface-hover) px-2.5 py-1 text-[0.75rem] text-(--cxs-color-on-surface)"
+                      role="button"
+                      tabindex="0"
                       (click)="openItem($event, item)"
+                      (keydown.enter)="openItem($event, item)"
                     >
                       <span
                         class="inline-block h-2 w-2 rounded-full"
@@ -143,12 +146,12 @@
                     >{{ day.date | date: 'EEE' }}</span
                   >
                   <span
+                    class="text-[1.4rem]"
                     [ngClass]="
                       isToday(day.date)
                         ? 'inline-flex h-7 w-7 items-center justify-center rounded-full border border-(--cxs-color-primary) text-(--cxs-color-primary)'
                         : 'text-(--cxs-color-on-surface)'
                     "
-                    class="text-[1.4rem]"
                   >
                     {{ day.date | date: 'd' }}
                   </span>
@@ -159,8 +162,11 @@
                     @for (item of allDayItemsForDate(day.date); track trackByItem($index, item)) {
                       <span
                         class="cursor-pointer rounded-full px-2.5 py-1 text-[0.75rem] font-medium text-white truncate"
+                        role="button"
+                        tabindex="0"
                         [style.background-color]="calendarColor(item)"
                         (click)="openItem($event, item)"
+                        (keydown.enter)="openItem($event, item)"
                       >
                         {{ item.title }}
                       </span>
@@ -178,9 +184,12 @@
                     @if (!item.isAllDay) {
                       <div
                         class="cursor-pointer rounded-(--cxs-radius-md) border bg-(--cxs-color-surface) p-3 transition hover:brightness-95"
+                        role="button"
+                        tabindex="0"
                         [style.border-color]="calendarColor(item)"
                         [style.border-left-width]="'3px'"
                         (click)="openItem($event, item)"
+                        (keydown.enter)="openItem($event, item)"
                       >
                         <div class="mb-1 font-semibold">{{ item.title }}</div>
                         <div class="flex items-center gap-2 text-[0.8rem] text-(--cxs-color-on-surface-muted)">
@@ -220,8 +229,11 @@
               @for (item of allDayItemsForDate(currentDate); track trackByItem($index, item)) {
                 <span
                   class="inline-flex cursor-pointer items-center gap-1.5 rounded-full px-3 py-1 text-[0.8rem] font-medium text-white"
+                  role="button"
+                  tabindex="0"
                   [style.background-color]="calendarColor(item)"
                   (click)="openItem($event, item)"
+                  (keydown.enter)="openItem($event, item)"
                 >
                   {{ item.title }}
                 </span>
@@ -243,9 +255,12 @@
                   @for (item of itemsForHour(currentDate, hour); track trackByItem($index, item)) {
                     <div
                       class="cursor-pointer rounded-(--cxs-radius-md) border bg-(--cxs-color-surface) p-3 transition hover:brightness-95"
+                      role="button"
+                      tabindex="0"
                       [style.border-color]="calendarColor(item)"
                       [style.border-left-width]="'3px'"
                       (click)="openItem($event, item)"
+                      (keydown.enter)="openItem($event, item)"
                     >
                       <div class="mb-1 font-semibold">{{ item.title }}</div>
                       <div class="flex items-center gap-2 text-[0.8rem] text-(--cxs-color-on-surface-muted)">
@@ -336,7 +351,7 @@
 
         <!-- Actions -->
         <div class="flex justify-between gap-2">
-          <cxs-button variant="ghost" color="danger" (click)="deleteItem()">Delete</cxs-button>
+          <cxs-button color="danger" variant="ghost" (click)="deleteItem()">Delete</cxs-button>
           <div class="flex gap-2">
             <cxs-button variant="ghost" (click)="isItemDetailOpen = false">Cancel</cxs-button>
             @if (editDraft.eventId) {
@@ -351,12 +366,12 @@
   }
 
   <app-event-composer
-    [(open)]="isComposerOpen"
-    [selectedDate]="selectedDate"
+    [calendarColorMap]="calendarColorMap()"
     [calendars]="ownCalendars()"
     [events]="availableEvents()"
-    [calendarColorMap]="calendarColorMap()"
     [primaryCalendarId]="primaryCalendarId()"
+    [selectedDate]="selectedDate"
+    [(open)]="isComposerOpen"
     (saved)="onComposerSaved($event)"
   />
 </section>

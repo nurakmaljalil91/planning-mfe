@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, OnInit, ViewEncapsulation, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, inject, OnInit, signal, ViewEncapsulation } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { forkJoin } from 'rxjs';
 import { CxsCardComponent } from 'cerxos-ui';
@@ -7,7 +7,7 @@ import { EventService } from '../../core/services/event.service';
 import { PlannerTaskService } from '../../core/services/planner-task.service';
 import { EventDto, PlannerTaskDto } from '../../core/models/planner.models';
 
-interface UpcomingItem {
+type UpcomingItem = {
   type: 'event' | 'task';
   id: number;
   title: string;
@@ -48,7 +48,7 @@ export class UpcomingEventsWidgetComponent implements OnInit {
           .map((e: EventDto) => ({ type: 'event' as const, id: e.id, title: e.title, date: new Date(e.startTime) }));
 
         const taskItems: UpcomingItem[] = (tasks.items ?? [])
-          .filter((t: PlannerTaskDto) => !t.isCompleted && t.dueDate != null && new Date(t.dueDate) >= now)
+          .filter((t: PlannerTaskDto) => !t.isCompleted && t.dueDate !== null && t.dueDate !== undefined && new Date(t.dueDate) >= now)
           .map((t: PlannerTaskDto) => ({ type: 'task' as const, id: t.id, title: t.title, date: new Date(t.dueDate!) }));
 
         const combined = [...eventItems, ...taskItems]

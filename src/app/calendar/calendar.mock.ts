@@ -1,6 +1,6 @@
 export type CalendarItemType = 'event' | 'task' | 'reminder';
 
-export interface CalendarItem {
+export type CalendarItem = {
   id: string;
   title: string;
   type: CalendarItemType;

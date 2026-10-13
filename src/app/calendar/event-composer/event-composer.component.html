@@ -139,18 +139,18 @@
             <!-- Day-of-week pill buttons -->
             <div class="flex flex-col gap-1.5">
               <span class="text-[0.78rem] text-(--cxs-color-on-surface-muted)">Repeat on</span>
-              <div class="flex flex-wrap gap-1.5" role="group" aria-label="Days of week">
+              <div aria-label="Days of week" class="flex flex-wrap gap-1.5" role="group">
                 @for (opt of recurrenceDayOptions; track opt.value) {
                   <button
                     class="rounded-full border px-2.5 py-1 text-[0.75rem] font-medium transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--cxs-color-focus)"
-                    [class.border-(--cxs-color-primary)]="isRecurrenceDaySelected(opt.value)"
-                    [class.bg-(--cxs-color-primary)]="isRecurrenceDaySelected(opt.value)"
-                    [class.text-white]="isRecurrenceDaySelected(opt.value)"
-                    [class.border-(--cxs-color-border)]="!isRecurrenceDaySelected(opt.value)"
-                    [class.bg-(--cxs-color-surface)]="!isRecurrenceDaySelected(opt.value)"
-                    [class.text-(--cxs-color-on-surface)]="!isRecurrenceDaySelected(opt.value)"
                     type="button"
                     [attr.aria-pressed]="isRecurrenceDaySelected(opt.value)"
+                    [class.bg-(--cxs-color-primary)]="isRecurrenceDaySelected(opt.value)"
+                    [class.bg-(--cxs-color-surface)]="!isRecurrenceDaySelected(opt.value)"
+                    [class.border-(--cxs-color-border)]="!isRecurrenceDaySelected(opt.value)"
+                    [class.border-(--cxs-color-primary)]="isRecurrenceDaySelected(opt.value)"
+                    [class.text-(--cxs-color-on-surface)]="!isRecurrenceDaySelected(opt.value)"
+                    [class.text-white]="isRecurrenceDaySelected(opt.value)"
                     (click)="toggleRecurrenceDay(opt.value)"
                   >{{ opt.label }}</button>
                 }

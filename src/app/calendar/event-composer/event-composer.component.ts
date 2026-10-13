@@ -2,12 +2,12 @@ import {
   ChangeDetectionStrategy,
   Component,
   EventEmitter,
+  inject,
   Input,
   OnChanges,
   Output,
-  SimpleChanges,
-  inject,
-  signal
+  signal,
+  SimpleChanges
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -27,7 +27,7 @@ import { CalendarItem, CalendarItemType } from '../calendar.mock';
 
 export type RecurrenceDay = 'MO' | 'TU' | 'WE' | 'TH' | 'FR' | 'SA' | 'SU';
 
-interface DraftItem {
+type DraftItem = {
   title: string;
   type: CalendarItemType;
   calendarId: number;
@@ -61,7 +61,7 @@ export class EventComposerComponent implements OnChanges {
   @Input() selectedDate: Date = new Date();
   @Input() calendars: CalendarDto[] = [];
   @Input() events: EventDto[] = [];
-  @Input() calendarColorMap: Map<number, string> = new Map();
+  @Input() calendarColorMap = new Map<number, string>();
   @Input() primaryCalendarId: number | null = null;
 
   @Output() saved = new EventEmitter<CalendarItem[]>();
@@ -71,7 +71,7 @@ export class EventComposerComponent implements OnChanges {
 
   draft: DraftItem = this.buildDraft(new Date());
 
-  readonly recurrenceDayOptions: ReadonlyArray<{ label: string; value: RecurrenceDay }> = [
+  readonly recurrenceDayOptions: readonly { label: string; value: RecurrenceDay }[] = [
     { label: 'Mon', value: 'MO' },
     { label: 'Tue', value: 'TU' },
     { label: 'Wed', value: 'WE' },
@@ -261,7 +261,7 @@ export class EventComposerComponent implements OnChanges {
 
   private mapTaskToCalendarItem(task: PlannerTaskDto): CalendarItem {
     const startRaw = task.dueDate ?? task.reminder;
-    const start = startRaw != null ? new Date(startRaw) : new Date();
+    const start = startRaw !== null && startRaw !== undefined ? new Date(startRaw) : new Date();
     return {
       id: `task-${task.id}`,
       title: task.title,
