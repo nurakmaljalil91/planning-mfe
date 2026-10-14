@@ -86,9 +86,12 @@ jobs:
             exit 0
           fi
 
-          gh workflow run deploy-cerxos-service.yml \
-            --repo nurakmaljalil91/CerxosWebSystem \
-            -f environment=production \
-            -f server=production \
-            -f service=planning-mfe \
-            -f image_tag="$IMAGE_TAG"
+          # Call the dispatch API directly: `gh workflow run` without a ref looks up the
+          # default branch, which this Actions-only token is not allowed to read.
+          gh api --method POST \
+            repos/nurakmaljalil91/CerxosWebSystem/actions/workflows/deploy-cerxos-service.yml/dispatches \
+            -f ref=main \
+            -f "inputs[environment]=production" \
+            -f "inputs[server]=production" \
+            -f "inputs[service]=planning-mfe" \
+            -f "inputs[image_tag]=$IMAGE_TAG"
