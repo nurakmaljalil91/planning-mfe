@@ -23,6 +23,7 @@ import {
   EventDto,
   PlannerTaskDto
 } from '../../core/models/planner.models';
+import { expandWeeklyOccurrences } from '../../core/utils/recurrence';
 import { CalendarItem, CalendarItemType } from '../calendar.mock';
 
 export type RecurrenceDay = 'MO' | 'TU' | 'WE' | 'TH' | 'FR' | 'SA' | 'SU';
@@ -273,71 +274,17 @@ export class EventComposerComponent implements OnChanges {
   }
 
   private expandRecurring(event: EventDto): CalendarItem[] {
-    if (!event.isRecurring || !event.recurrenceRule) {
-      return [this.mapEventToCalendarItem(event)];
+    const base = this.mapEventToCalendarItem(event);
+    const occurrences = expandWeeklyOccurrences(event);
+    if (!occurrences) {
+      return [base];
     }
-
-    if (!event.recurrenceRule.includes('FREQ=WEEKLY')) {
-      return [this.mapEventToCalendarItem(event)];
-    }
-
-    const byDayMatch = event.recurrenceRule.match(/BYDAY=([A-Z,]+)/);
-    if (!byDayMatch) {
-      return [this.mapEventToCalendarItem(event)];
-    }
-    const byDayRaw = byDayMatch[1].split(',');
-
-    const dayMap: Record<string, number> = {
-      SU: 0, MO: 1, TU: 2, WE: 3, TH: 4, FR: 5, SA: 6
-    };
-    const targetDays = new Set<number>(
-      byDayRaw.filter((d) => d in dayMap).map((d) => dayMap[d])
-    );
-
-    let untilDate: Date | null = null;
-    const untilMatch = event.recurrenceRule.match(/UNTIL=(\d{8}T\d{6}Z)/);
-    if (untilMatch) {
-      const raw = untilMatch[1];
-      const year = parseInt(raw.slice(0, 4), 10);
-      const month = parseInt(raw.slice(4, 6), 10) - 1;
-      const day = parseInt(raw.slice(6, 8), 10);
-      untilDate = new Date(Date.UTC(year, month, day));
-    }
-
-    const today = new Date();
-    const maxDate = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 365);
-    const windowEnd = untilDate && untilDate < maxDate ? untilDate : maxDate;
-
-    const eventStart = new Date(event.startTime);
-    const eventEnd = new Date(event.endTime);
-    const durationMs = eventEnd.getTime() - eventStart.getTime();
-
-    const items: CalendarItem[] = [];
-    const cursor = this.startOfDay(eventStart);
-
-    while (cursor <= windowEnd) {
-      if (targetDays.has(cursor.getDay())) {
-        const occurrenceStart = new Date(
-          cursor.getFullYear(), cursor.getMonth(), cursor.getDate(),
-          eventStart.getHours(), eventStart.getMinutes(), eventStart.getSeconds()
-        );
-        const occurrenceEnd = new Date(occurrenceStart.getTime() + durationMs);
-        items.push({
-          id: `event-${event.id}-${occurrenceStart.toISOString()}`,
-          title: event.title,
-          type: 'event',
-          start: occurrenceStart,
-          end: occurrenceEnd,
-          isAllDay: event.isAllDay,
-          location: event.location ?? undefined,
-          notes: event.description ?? undefined,
-          calendarId: event.calendarId
-        });
-      }
-      cursor.setDate(cursor.getDate() + 1);
-    }
-
-    return items.length > 0 ? items : [this.mapEventToCalendarItem(event)];
+    return occurrences.map(({ start, end }) => ({
+      ...base,
+      id: `event-${event.id}-${start.toISOString()}`,
+      start,
+      end
+    }));
   }
 
   private buildRrule(days: readonly RecurrenceDay[], endDate: string): string {
@@ -371,10 +318,6 @@ export class EventComposerComponent implements OnChanges {
   private combineDateAndTime(date: Date, time: string): Date {
     const [hours, minutes] = time.split(':').map((v) => Number.parseInt(v, 10));
     return new Date(date.getFullYear(), date.getMonth(), date.getDate(), hours, minutes);
-  }
-
-  private startOfDay(date: Date): Date {
-    return new Date(date.getFullYear(), date.getMonth(), date.getDate());
   }
 
   private formatDateToYYYYMMDD(date: Date): string {
