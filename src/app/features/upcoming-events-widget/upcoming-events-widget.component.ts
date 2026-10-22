@@ -6,8 +6,15 @@ import { CxsCardComponent } from 'cerxos-ui';
 import { EventService } from '../../core/services/event.service';
 import { PlannerTaskService } from '../../core/services/planner-task.service';
 import { EventDto, PlannerTaskDto } from '../../core/models/planner.models';
+import { expandWeeklyOccurrences } from '../../core/utils/recurrence';
+
+export const UPCOMING_WINDOW_DAYS = 30;
+const MAX_ITEMS = 5;
+// A 30-day window rarely holds more; recurring series count once here and expand client-side.
+const PAGE_SIZE = 100;
 
 type UpcomingItem = {
+  key: string;
   type: 'event' | 'task';
   id: number;
   title: string;
@@ -34,26 +41,36 @@ export class UpcomingEventsWidgetComponent implements OnInit {
   readonly isLoading = signal(true);
   readonly error = signal<string | null>(null);
   readonly upcomingItems = signal<UpcomingItem[]>([]);
+  readonly emptyText = `Nothing in the next ${UPCOMING_WINDOW_DAYS} days.`;
 
   ngOnInit(): void {
     const now = new Date();
+    const windowEnd = new Date(now);
+    windowEnd.setDate(windowEnd.getDate() + UPCOMING_WINDOW_DAYS);
+    const rangeParams = {
+      page: 1,
+      total: PAGE_SIZE,
+      rangeStart: now.toISOString(),
+      rangeEnd: windowEnd.toISOString(),
+    };
 
     forkJoin({
-      events: this.eventService.getEvents(undefined, { sortBy: 'startTime', descending: false, total: 10 }),
-      tasks: this.taskService.getTasks(undefined, { sortBy: 'dueDate', descending: false, total: 10 }),
+      events: this.eventService.getEvents(undefined, rangeParams),
+      tasks: this.taskService.getTasks(undefined, rangeParams),
     }).subscribe({
       next: ({ events, tasks }) => {
-        const eventItems: UpcomingItem[] = (events.items ?? [])
-          .filter((e: EventDto) => new Date(e.startTime) >= now)
-          .map((e: EventDto) => ({ type: 'event' as const, id: e.id, title: e.title, date: new Date(e.startTime) }));
+        const eventItems = (events.items ?? []).flatMap((e) => this.toEventItems(e, now, windowEnd));
 
         const taskItems: UpcomingItem[] = (tasks.items ?? [])
-          .filter((t: PlannerTaskDto) => !t.isCompleted && t.dueDate !== null && t.dueDate !== undefined && new Date(t.dueDate) >= now)
-          .map((t: PlannerTaskDto) => ({ type: 'task' as const, id: t.id, title: t.title, date: new Date(t.dueDate!) }));
+          .filter((t: PlannerTaskDto) => !t.isCompleted && this.isDueInWindow(t.dueDate, now, windowEnd))
+          .map((t: PlannerTaskDto) => {
+            const date = new Date(t.dueDate!);
+            return { key: `task-${t.id}`, type: 'task' as const, id: t.id, title: t.title, date };
+          });
 
         const combined = [...eventItems, ...taskItems]
           .sort((a, b) => a.date.getTime() - b.date.getTime())
-          .slice(0, 5);
+          .slice(0, MAX_ITEMS);
 
         this.upcomingItems.set(combined);
         this.isLoading.set(false);
@@ -71,5 +88,28 @@ export class UpcomingEventsWidgetComponent implements OnInit {
 
   formatTime(date: Date): string {
     return date.toLocaleTimeString('en-MY', { hour: '2-digit', minute: '2-digit' });
+  }
+
+  private toEventItems(event: EventDto, now: Date, windowEnd: Date): UpcomingItem[] {
+    const occurrences = expandWeeklyOccurrences(event, { start: now, end: windowEnd })
+      ?? [{ start: new Date(event.startTime), end: new Date(event.endTime) }];
+
+    return occurrences
+      .filter(({ start, end }) => end >= now && start < windowEnd)
+      .map(({ start }) => ({
+        key: `event-${event.id}-${start.toISOString()}`,
+        type: 'event' as const,
+        id: event.id,
+        title: event.title,
+        date: start,
+      }));
+  }
+
+  private isDueInWindow(dueDate: string | null, now: Date, windowEnd: Date): boolean {
+    if (!dueDate) {
+      return false;
+    }
+    const due = new Date(dueDate);
+    return due >= now && due < windowEnd;
   }
 }

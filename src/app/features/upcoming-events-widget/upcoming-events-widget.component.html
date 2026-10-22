@@ -19,10 +19,10 @@
   } @else if (error()) {
     <p class="error-text">{{ error() }}</p>
   } @else if (upcomingItems().length === 0) {
-    <p class="empty-text">No upcoming events or tasks.</p>
+    <p class="empty-text">{{ emptyText }}</p>
   } @else {
     <ul class="space-y-3">
-      @for (item of upcomingItems(); track item.id + item.type) {
+      @for (item of upcomingItems(); track item.key) {
         <li class="flex gap-3 items-start">
           <div class="shrink-0 w-16 rounded-md bg-[var(--cxs-color-surface-hover)] border border-[var(--cxs-color-border)] text-center py-1.5 px-1">
             <p class="item-date-label">{{ formatDate(item.date) }}</p>

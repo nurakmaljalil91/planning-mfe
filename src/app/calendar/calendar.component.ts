@@ -25,6 +25,7 @@ import {
   ReminderDto,
   UpdateEventDto
 } from '../core/models/planner.models';
+import { expandWeeklyOccurrences } from '../core/utils/recurrence';
 import { CalendarItem } from './calendar.mock';
 import { CalendarSidebarComponent } from './calendar-sidebar/calendar-sidebar.component';
 import { EventComposerComponent } from './event-composer/event-composer.component';
@@ -624,87 +625,16 @@ export class CalendarComponent implements OnInit {
   }
 
   private expandRecurring(event: EventDto, visibleRange?: VisibleRange): CalendarItem[] {
-    if (!event.isRecurring || !event.recurrenceRule) {
-      return [this.mapEventToCalendarItem(event)];
+    const base = this.mapEventToCalendarItem(event);
+    const occurrences = expandWeeklyOccurrences(event, visibleRange);
+    if (!occurrences) {
+      return [base];
     }
-
-    // Only handle FREQ=WEEKLY (the only frequency the UI creates)
-    if (!event.recurrenceRule.includes('FREQ=WEEKLY')) {
-      return [this.mapEventToCalendarItem(event)];
-    }
-
-    // Parse BYDAY
-    const byDayMatch = event.recurrenceRule.match(/BYDAY=([A-Z,]+)/);
-    if (!byDayMatch) {
-      return [this.mapEventToCalendarItem(event)];
-    }
-    const byDayRaw = byDayMatch[1].split(',');
-
-    // Day-of-week mapping: JS getDay() values
-    const dayMap: Record<string, number> = {
-      SU: 0, MO: 1, TU: 2, WE: 3, TH: 4, FR: 5, SA: 6
-    };
-    const targetDays = new Set<number>(
-      byDayRaw.filter((d) => d in dayMap).map((d) => dayMap[d])
-    );
-
-    // Parse optional UNTIL
-    let untilDate: Date | null = null;
-    const untilMatch = event.recurrenceRule.match(/UNTIL=(\d{8}T\d{6}Z)/);
-    if (untilMatch) {
-      const raw = untilMatch[1];
-      const year = parseInt(raw.slice(0, 4), 10);
-      const month = parseInt(raw.slice(4, 6), 10) - 1;
-      const day = parseInt(raw.slice(6, 8), 10);
-      untilDate = new Date(Date.UTC(year, month, day));
-    }
-
-    const eventStart = new Date(event.startTime);
-    const eventEnd = new Date(event.endTime);
-    const durationMs = eventEnd.getTime() - eventStart.getTime();
-    const fallbackEnd = this.addDays(this.startOfDay(new Date()), 365);
-    const windowStart = visibleRange
-      ? this.maxDate(this.startOfDay(eventStart), this.startOfDay(visibleRange.start))
-      : this.startOfDay(eventStart);
-    const windowEnd = visibleRange ? visibleRange.end : fallbackEnd;
-
-    const items: CalendarItem[] = [];
-    const cursor = this.startOfDay(windowStart);
-
-    while (cursor < windowEnd) {
-      if (untilDate && cursor > untilDate) {
-        break;
-      }
-
-      if (targetDays.has(cursor.getDay())) {
-        const occurrenceStart = new Date(
-          cursor.getFullYear(),
-          cursor.getMonth(),
-          cursor.getDate(),
-          eventStart.getHours(),
-          eventStart.getMinutes(),
-          eventStart.getSeconds()
-        );
-        const occurrenceEnd = new Date(occurrenceStart.getTime() + durationMs);
-        items.push({
-          id: `event-${event.id}-${occurrenceStart.toISOString()}`,
-          title: event.title,
-          type: 'event',
-          start: occurrenceStart,
-          end: occurrenceEnd,
-          isAllDay: event.isAllDay,
-          location: event.location ?? undefined,
-          notes: event.description ?? undefined,
-          calendarId: event.calendarId
-        });
-      }
-      cursor.setDate(cursor.getDate() + 1);
-    }
-
-    return items.length > 0 ? items : [this.mapEventToCalendarItem(event)];
-  }
-
-  private maxDate(first: Date, second: Date): Date {
-    return first > second ? first : second;
+    return occurrences.map(({ start, end }) => ({
+      ...base,
+      id: `event-${event.id}-${start.toISOString()}`,
+      start,
+      end
+    }));
   }
 }
