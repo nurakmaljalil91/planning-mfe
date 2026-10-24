@@ -109,6 +109,36 @@ describe('UpcomingEventsWidgetComponent', () => {
     ]);
 
     expect(titles(fixture)).toEqual(['In progress']);
+    expect(fixture.componentInstance.upcomingItems()[0].relativeLabel).toBe('Ongoing');
+  });
+
+  it('labels events and tasks by local calendar day', () => {
+    const fixture = render(
+      [
+        makeEvent(1, { startTime: at(21, 16), endTime: at(21, 17) }),
+        makeEvent(2, { startTime: at(22, 9), endTime: at(22, 10) })
+      ],
+      [makeTask(3, { dueDate: at(23, 9) })]
+    );
+
+    expect(fixture.componentInstance.upcomingItems().map((item) => item.relativeLabel)).toEqual([
+      'Today', 'Tomorrow', 'In 2 days'
+    ]);
+    const rows = (fixture.nativeElement as HTMLElement).shadowRoot?.querySelectorAll('li');
+    expect(Array.from(rows ?? []).map((row) => row.querySelector('.item-relative-label')?.textContent?.trim()))
+      .toEqual(['Today', 'Tomorrow', 'In 2 days']);
+    expect(Array.from(rows ?? []).map((row) => row.textContent)).toEqual([
+      jasmine.stringMatching(/Event 1.*Event.*Today/s),
+      jasmine.stringMatching(/Event 2.*Event.*Tomorrow/s),
+      jasmine.stringMatching(/Task 3.*Task.*In 2 days/s)
+    ]);
+  });
+
+  it('uses the next local date for tomorrow even when it is less than 24 hours away', () => {
+    jasmine.clock().mockDate(new Date(2026, 9, 21, 23, 45));
+    const fixture = render([], [makeTask(1, { dueDate: at(22, 0, 15) })]);
+
+    expect(fixture.componentInstance.upcomingItems()[0].relativeLabel).toBe('Tomorrow');
   });
 
   it('hides an event starting after the 30-day window', () => {
@@ -137,6 +167,7 @@ describe('UpcomingEventsWidgetComponent', () => {
 
     const [first] = fixture.componentInstance.upcomingItems();
     expect(first.date).toEqual(new Date(2026, 9, 26, 9, 0));
+    expect(first.relativeLabel).toBe('In 5 days');
   });
 
   it('hides a recurring series that ended before now', () => {
@@ -163,6 +194,8 @@ describe('UpcomingEventsWidgetComponent', () => {
 
     expect(titles(fixture)).toEqual(['Due soon']);
     expect(fixture.componentInstance.upcomingItems()[0].date).toEqual(new Date(2026, 9, 23, 9, 0));
+    expect(shadowText(fixture)).toContain('In 2 days');
+    expect(shadowText(fixture)).not.toContain('Reminder only');
   });
 
   it('merges, orders ascending, and shows at most 5 items with distinct rows per occurrence', () => {

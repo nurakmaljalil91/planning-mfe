@@ -19,7 +19,11 @@ type UpcomingItem = {
   id: number;
   title: string;
   date: Date;
+  end?: Date;
+  relativeLabel: string;
 }
+
+type UpcomingItemCandidate = Omit<UpcomingItem, 'relativeLabel'>;
 
 @Component({
   selector: 'app-upcoming-events-widget',
@@ -61,7 +65,7 @@ export class UpcomingEventsWidgetComponent implements OnInit {
       next: ({ events, tasks }) => {
         const eventItems = (events.items ?? []).flatMap((e) => this.toEventItems(e, now, windowEnd));
 
-        const taskItems: UpcomingItem[] = (tasks.items ?? [])
+        const taskItems: UpcomingItemCandidate[] = (tasks.items ?? [])
           .filter((t: PlannerTaskDto) => !t.isCompleted && this.isDueInWindow(t.dueDate, now, windowEnd))
           .map((t: PlannerTaskDto) => {
             const date = new Date(t.dueDate!);
@@ -70,7 +74,8 @@ export class UpcomingEventsWidgetComponent implements OnInit {
 
         const combined = [...eventItems, ...taskItems]
           .sort((a, b) => a.date.getTime() - b.date.getTime())
-          .slice(0, MAX_ITEMS);
+          .slice(0, MAX_ITEMS)
+          .map((item) => ({ ...item, relativeLabel: this.relativeLabel(item, now) }));
 
         this.upcomingItems.set(combined);
         this.isLoading.set(false);
@@ -90,19 +95,38 @@ export class UpcomingEventsWidgetComponent implements OnInit {
     return date.toLocaleTimeString('en-MY', { hour: '2-digit', minute: '2-digit' });
   }
 
-  private toEventItems(event: EventDto, now: Date, windowEnd: Date): UpcomingItem[] {
+  private toEventItems(event: EventDto, now: Date, windowEnd: Date): UpcomingItemCandidate[] {
     const occurrences = expandWeeklyOccurrences(event, { start: now, end: windowEnd })
       ?? [{ start: new Date(event.startTime), end: new Date(event.endTime) }];
 
     return occurrences
       .filter(({ start, end }) => end >= now && start < windowEnd)
-      .map(({ start }) => ({
+      .map(({ start, end }) => ({
         key: `event-${event.id}-${start.toISOString()}`,
         type: 'event' as const,
         id: event.id,
         title: event.title,
         date: start,
+        end,
       }));
+  }
+
+  private relativeLabel(item: UpcomingItemCandidate, now: Date): string {
+    if (item.type === 'event' && item.end && item.date <= now && item.end >= now) {
+      return 'Ongoing';
+    }
+
+    const localDay = (date: Date): number =>
+      Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()) / 86_400_000;
+    const daysAway = localDay(item.date) - localDay(now);
+
+    if (daysAway <= 0) {
+      return 'Today';
+    }
+    if (daysAway === 1) {
+      return 'Tomorrow';
+    }
+    return `In ${daysAway} days`;
   }
 
   private isDueInWindow(dueDate: string | null, now: Date, windowEnd: Date): boolean {
