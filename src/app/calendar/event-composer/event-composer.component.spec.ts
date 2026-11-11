@@ -1,5 +1,5 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { SimpleChange } from '@angular/core';
+import { ChangeDetectorRef, SimpleChange } from '@angular/core';
 import { of, throwError } from 'rxjs';
 
 import { EventService } from '../../core/services/event.service';
@@ -173,5 +173,56 @@ describe('EventComposerComponent events', () => {
     saveReturning(created({ isRecurring: true, recurrenceRule: 'FREQ=WEEKLY' }));
 
     expect(saved).toHaveBeenCalledOnceWith([jasmine.objectContaining({ id: 'event-30' })]);
+  });
+});
+
+describe('EventComposerComponent recurrence days', () => {
+  let fixture: ComponentFixture<EventComposerComponent>;
+  let component: EventComposerComponent;
+  let eventService: jasmine.SpyObj<EventService>;
+
+  beforeEach(async () => {
+    eventService = jasmine.createSpyObj<EventService>('EventService', ['createEvent']);
+    await TestBed.configureTestingModule({
+      imports: [EventComposerComponent],
+      providers: [
+        { provide: EventService, useValue: eventService },
+        { provide: PlannerTaskService, useValue: jasmine.createSpyObj('PlannerTaskService', ['createTask']) },
+        { provide: ReminderService, useValue: jasmine.createSpyObj('ReminderService', ['createReminder']) }
+      ]
+    }).compileComponents();
+    fixture = TestBed.createComponent(EventComposerComponent);
+    component = fixture.componentInstance;
+    component.primaryCalendarId = 2;
+    component.selectedDate = new Date(2026, 6, 6);
+    fixture.componentRef.setInput('open', true);
+    fixture.detectChanges();
+    component.draft = { ...component.draft, type: 'event', title: 'Standup', isRecurring: true };
+    fixture.componentRef.injector.get(ChangeDetectorRef).markForCheck();
+    fixture.detectChanges();
+  });
+
+  const dayButtons = (): HTMLButtonElement[] =>
+    Array.from(
+      (fixture.nativeElement as HTMLElement).querySelectorAll<HTMLButtonElement>('[aria-label="Days of week"] button')
+    );
+
+  it('lists recurrence weekdays from Sun to Sat', () => {
+    expect(dayButtons().map((button) => button.textContent?.trim())).toEqual([
+      'Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'
+    ]);
+  });
+
+  it('keeps the stored day codes when Sun and Wed are selected', () => {
+    const buttons = dayButtons();
+    buttons[0].click();
+    buttons[3].click();
+    eventService.createEvent.and.returnValue(of({ ...event, isRecurring: true }));
+
+    component.save();
+
+    const rule = eventService.createEvent.calls.mostRecent().args[0].recurrenceRule as string;
+    const byDay = /BYDAY=([A-Z,]+)/.exec(rule)?.[1].split(',');
+    expect(byDay).toEqual(jasmine.arrayWithExactContents(['SU', 'WE']));
   });
 });

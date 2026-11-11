@@ -73,13 +73,13 @@ export class EventComposerComponent implements OnChanges {
   draft: DraftItem = this.buildDraft(new Date());
 
   readonly recurrenceDayOptions: readonly { label: string; value: RecurrenceDay }[] = [
+    { label: 'Sun', value: 'SU' },
     { label: 'Mon', value: 'MO' },
     { label: 'Tue', value: 'TU' },
     { label: 'Wed', value: 'WE' },
     { label: 'Thu', value: 'TH' },
     { label: 'Fri', value: 'FR' },
-    { label: 'Sat', value: 'SA' },
-    { label: 'Sun', value: 'SU' }
+    { label: 'Sat', value: 'SA' }
   ];
 
   ngOnChanges(changes: SimpleChanges): void {

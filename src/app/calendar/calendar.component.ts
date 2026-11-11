@@ -104,7 +104,7 @@ export class CalendarComponent implements OnInit {
   isItemDetailOpen = false;
   editDraft: EditDraft | null = null;
 
-  readonly weekDays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  readonly weekDays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
   readonly hours = Array.from({ length: 13 }, (_, index) => index + 7);
 
   ngOnInit(): void {
@@ -585,7 +585,7 @@ export class CalendarComponent implements OnInit {
   }
 
   private startOfWeek(date: Date): Date {
-    const weekStartsOn = 1;
+    const weekStartsOn = 0;
     const day = date.getDay();
     const diff = (day - weekStartsOn + 7) % 7;
     return this.addDays(this.startOfDay(date), -diff);

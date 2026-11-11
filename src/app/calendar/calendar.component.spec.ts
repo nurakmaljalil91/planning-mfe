@@ -117,12 +117,12 @@ describe('CalendarComponent', () => {
     expect(eventParams).toEqual(jasmine.objectContaining({
       page: 1,
       total: 500,
-      rangeStart: new Date(2026, 5, 29).toISOString(),
-      rangeEnd: new Date(2026, 7, 10).toISOString()
+      rangeStart: new Date(2026, 5, 28).toISOString(),
+      rangeEnd: new Date(2026, 7, 9).toISOString()
     }));
     expect(taskParams).toEqual(jasmine.objectContaining({
-      rangeStart: new Date(2026, 5, 29).toISOString(),
-      rangeEnd: new Date(2026, 7, 10).toISOString()
+      rangeStart: new Date(2026, 5, 28).toISOString(),
+      rangeEnd: new Date(2026, 7, 9).toISOString()
     }));
   });
 
@@ -136,8 +136,8 @@ describe('CalendarComponent', () => {
     expect(eventService.getEvents).toHaveBeenCalledTimes(1);
     const eventParams = eventService.getEvents.calls.mostRecent().args[1];
     expect(eventParams).toEqual(jasmine.objectContaining({
-      rangeStart: new Date(2026, 6, 27).toISOString(),
-      rangeEnd: new Date(2026, 8, 7).toISOString()
+      rangeStart: new Date(2026, 6, 26).toISOString(),
+      rangeEnd: new Date(2026, 8, 6).toISOString()
     }));
   });
 
@@ -156,8 +156,8 @@ describe('CalendarComponent', () => {
 
     fixture.detectChanges();
 
-    const visibleStart = new Date(2026, 5, 29);
-    const visibleEnd = new Date(2026, 7, 10);
+    const visibleStart = new Date(2026, 5, 28);
+    const visibleEnd = new Date(2026, 7, 9);
     const items = component.items();
     expect(items.length).toBeGreaterThan(0);
     expect(items.every((item) => item.start >= visibleStart && item.start < visibleEnd)).toBeTrue();
@@ -190,5 +190,61 @@ describe('CalendarComponent', () => {
       calendar.id === 2 ? { ...calendar, isVisible: false } : calendar
     ));
     expect(component.itemsForDate(new Date(2026, 6, 15)).some((item) => item.id === 'reminder-45')).toBeFalse();
+  });
+  describe('Sunday week start', () => {
+    const sameDay = (actual: Date, expected: Date): void => {
+      expect(actual.toDateString()).toBe(expected.toDateString());
+    };
+
+    it('starts the July 2026 month grid on Sunday 28 June and ends it on Saturday 8 August', () => {
+      component.currentDate = new Date(2026, 6, 15);
+
+      const days = component.monthDays;
+
+      expect(days.length).toBe(42);
+      sameDay(days[0].date, new Date(2026, 5, 28));
+      expect(days[0].date.getDay()).toBe(0);
+      sameDay(days[41].date, new Date(2026, 7, 8));
+      expect(days[41].date.getDay()).toBe(6);
+    });
+
+    it('starts the November 2026 month grid on Sunday 1 November', () => {
+      component.currentDate = new Date(2026, 10, 20);
+
+      sameDay(component.monthDays[0].date, new Date(2026, 10, 1));
+    });
+
+    it('renders month view weekday headers from Sun to Sat', () => {
+      component.currentDate = new Date(2026, 6, 15);
+      fixture.detectChanges();
+
+      const header = fixture.nativeElement.querySelector('.grid-cols-7') as HTMLElement;
+      const labels = Array.from(header.children).map((el) => el.textContent?.trim());
+
+      expect(labels).toEqual(['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']);
+    });
+
+    for (const [label, current] of [
+      ['Wednesday', new Date(2026, 10, 11)],
+      ['Sunday', new Date(2026, 10, 8)],
+      ['Saturday', new Date(2026, 10, 14)]
+    ] as const) {
+      it(`shows Sunday 8 to Saturday 14 November 2026 in week view when the current date is a ${label}`, () => {
+        component.currentDate = current;
+        component.setView('week');
+
+        const days = component.weekDaysWithItems;
+        expect(days.length).toBe(7);
+        sameDay(days[0].date, new Date(2026, 10, 8));
+        sameDay(days[6].date, new Date(2026, 10, 14));
+        expect(component.viewLabel).toBe('Nov 8 - Nov 14');
+
+        const eventParams = eventService.getEvents.calls.mostRecent().args[1];
+        expect(eventParams).toEqual(jasmine.objectContaining({
+          rangeStart: new Date(2026, 10, 8).toISOString(),
+          rangeEnd: new Date(2026, 10, 15).toISOString()
+        }));
+      });
+    }
   });
 });
