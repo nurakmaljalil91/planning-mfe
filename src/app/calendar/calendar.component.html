@@ -104,7 +104,7 @@
                 <div class="flex flex-col items-start gap-1">
                   @for (item of day.items | slice: 0:3; track trackByItem($index, item)) {
                     <span
-                      class="inline-flex cursor-pointer items-center gap-1.5 rounded-full bg-(--cxs-color-surface-hover) px-2.5 py-1 text-[0.75rem] text-(--cxs-color-on-surface)"
+                      class="inline-flex items-center gap-1.5 rounded-full bg-(--cxs-color-surface-hover) px-2.5 py-1 text-[0.75rem] text-(--cxs-color-on-surface)"
                       role="button"
                       tabindex="0"
                       (click)="openItem($event, item)"
@@ -161,7 +161,7 @@
                   <div class="flex flex-col gap-1">
                     @for (item of allDayItemsForDate(day.date); track trackByItem($index, item)) {
                       <span
-                        class="cursor-pointer rounded-full px-2.5 py-1 text-[0.75rem] font-medium text-white truncate"
+                        class="rounded-full px-2.5 py-1 text-[0.75rem] font-medium text-white truncate"
                         role="button"
                         tabindex="0"
                         [style.background-color]="calendarColor(item)"
@@ -183,7 +183,7 @@
                   @for (item of day.items; track trackByItem($index, item)) {
                     @if (!item.isAllDay) {
                       <div
-                        class="cursor-pointer rounded-(--cxs-radius-md) border bg-(--cxs-color-surface) p-3 transition hover:brightness-95"
+                        class="rounded-(--cxs-radius-md) border bg-(--cxs-color-surface) p-3 transition hover:brightness-95"
                         role="button"
                         tabindex="0"
                         [style.border-color]="calendarColor(item)"
@@ -228,7 +228,7 @@
               <span class="self-center text-[0.75rem] uppercase tracking-[0.08em] text-(--cxs-color-on-surface-muted) mr-1">All day</span>
               @for (item of allDayItemsForDate(currentDate); track trackByItem($index, item)) {
                 <span
-                  class="inline-flex cursor-pointer items-center gap-1.5 rounded-full px-3 py-1 text-[0.8rem] font-medium text-white"
+                  class="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[0.8rem] font-medium text-white"
                   role="button"
                   tabindex="0"
                   [style.background-color]="calendarColor(item)"
@@ -254,7 +254,7 @@
                 <div class="flex flex-col gap-2">
                   @for (item of itemsForHour(currentDate, hour); track trackByItem($index, item)) {
                     <div
-                      class="cursor-pointer rounded-(--cxs-radius-md) border bg-(--cxs-color-surface) p-3 transition hover:brightness-95"
+                      class="rounded-(--cxs-radius-md) border bg-(--cxs-color-surface) p-3 transition hover:brightness-95"
                       role="button"
                       tabindex="0"
                       [style.border-color]="calendarColor(item)"
@@ -310,9 +310,9 @@
 
         <!-- Start / End date-time (only for events) -->
         @if (editDraft.type === 'event') {
-          <label class="flex cursor-pointer items-center gap-2.5 text-[0.85rem] text-(--cxs-color-on-surface)">
+          <label class="flex items-center gap-2.5 text-[0.85rem] text-(--cxs-color-on-surface)">
             <input
-              class="h-4 w-4 cursor-pointer accent-(--cxs-color-primary)"
+              class="h-4 w-4 accent-(--cxs-color-primary)"
               type="checkbox"
               [(ngModel)]="editDraft.isAllDay"
             />

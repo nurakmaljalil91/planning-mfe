@@ -58,9 +58,9 @@
 
     <!-- All day toggle — events only -->
     @if (draft.type === 'event') {
-      <label class="flex cursor-pointer items-center gap-2.5 text-[0.85rem] text-(--cxs-color-on-surface)">
+      <label class="flex items-center gap-2.5 text-[0.85rem] text-(--cxs-color-on-surface)">
         <input
-          class="h-4 w-4 cursor-pointer accent-(--cxs-color-primary)"
+          class="h-4 w-4 accent-(--cxs-color-primary)"
           type="checkbox"
           [(ngModel)]="draft.isAllDay"
         />
@@ -123,9 +123,9 @@
       <div class="flex flex-col gap-3 rounded-(--cxs-radius-md) border border-(--cxs-color-border) bg-(--cxs-color-surface) p-3">
 
         <!-- Repeats toggle -->
-        <label class="flex cursor-pointer items-center gap-2.5 text-[0.85rem] text-(--cxs-color-on-surface)">
+        <label class="flex items-center gap-2.5 text-[0.85rem] text-(--cxs-color-on-surface)">
           <input
-            class="h-4 w-4 cursor-pointer accent-(--cxs-color-primary)"
+            class="h-4 w-4 accent-(--cxs-color-primary)"
             type="checkbox"
             [(ngModel)]="draft.isRecurring"
           />

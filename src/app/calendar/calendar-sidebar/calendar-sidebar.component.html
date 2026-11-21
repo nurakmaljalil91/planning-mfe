@@ -9,12 +9,12 @@
       @for (cal of ownCalendars; track trackById($index, cal); let i = $index) {
         <li class="flex items-center gap-2 rounded-(--cxs-radius-md) px-2 py-1.5 transition hover:bg-(--cxs-color-surface-hover)">
           <label
-            class="relative inline-flex h-2.5 w-2.5 shrink-0 cursor-pointer rounded-full"
+            class="relative inline-flex h-2.5 w-2.5 shrink-0 rounded-full"
             [attr.title]="'Change color for ' + cal.title"
             [style.background-color]="dotColor(cal, i)"
           >
             <input
-              class="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+              class="absolute inset-0 h-full w-full opacity-0"
               type="color"
               [value]="dotColor(cal, i)"
               (change)="changeColor(cal.id, $any($event.target).value)"
