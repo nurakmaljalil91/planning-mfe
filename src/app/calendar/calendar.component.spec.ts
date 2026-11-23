@@ -2,10 +2,8 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { of } from 'rxjs';
 
 import {
-  CalendarDto,
   CalendarSubscriptionDto,
   EventDto,
-  PaginatedResult,
   PlannerTaskDto,
   ReminderDto
 } from '../core/models/planner.models';
@@ -14,46 +12,7 @@ import { EventService } from '../core/services/event.service';
 import { PlannerTaskService } from '../core/services/planner-task.service';
 import { ReminderService } from '../core/services/reminder.service';
 import { CalendarComponent } from './calendar.component';
-
-const makeCalendar = (overrides: Partial<CalendarDto> = {}): CalendarDto => ({
-  id: 1,
-  title: 'My Calendar',
-  description: null,
-  timeZone: null,
-  isPrimary: true,
-  isPublic: false,
-  isVisible: true,
-  isGoogleCalendar: false,
-  userId: 'user-1',
-  color: null,
-  events: [],
-  tasks: [],
-  ...overrides
-});
-
-const makeEvent = (overrides: Partial<EventDto> = {}): EventDto => ({
-  id: 1,
-  calendarId: 1,
-  title: 'Event',
-  description: null,
-  startTime: '2026-07-06T09:00:00.000Z',
-  endTime: '2026-07-06T10:00:00.000Z',
-  location: null,
-  isAllDay: false,
-  isRecurring: false,
-  recurrenceRule: null,
-  reminders: [],
-  ...overrides
-});
-
-const makePaginatedResult = <T>(items: T[]): PaginatedResult<T> => ({
-  items,
-  pageNumber: 1,
-  totalPages: 1,
-  totalCount: items.length,
-  hasPreviousPage: false,
-  hasNextPage: false
-});
+import { makeCalendar, makeEvent, makePaginatedResult } from './testing/calendar-fixtures';
 
 describe('CalendarComponent', () => {
   let fixture: ComponentFixture<CalendarComponent>;
@@ -247,4 +206,5 @@ describe('CalendarComponent', () => {
       });
     }
   });
+
 });

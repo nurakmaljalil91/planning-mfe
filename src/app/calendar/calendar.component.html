@@ -344,6 +344,29 @@
           </div>
         }
 
+        <!-- Due date-time (tasks) / reminder date-time (reminders) -->
+        @if (editDraft.kind === 'task' || editDraft.kind === 'reminder') {
+          <div class="flex flex-col gap-1.5">
+            <span class="text-[0.85rem] text-(--cxs-color-on-surface-muted)">
+              {{ editDraft.kind === 'task' ? 'Due' : 'Remind at' }}
+            </span>
+            <div class="flex gap-2">
+              <input
+                class="min-w-0 flex-1 rounded-(--cxs-radius-md) border border-(--cxs-color-border) bg-(--cxs-color-surface) px-2.5 py-2 text-[0.85rem] text-(--cxs-color-on-surface) transition focus:border-(--cxs-color-focus) focus:outline-none focus:ring-2 focus:ring-(--cxs-color-focus)"
+                type="date"
+                [attr.aria-label]="editDraft.kind === 'task' ? 'Due date' : 'Reminder date'"
+                [(ngModel)]="editDraft.startDate"
+              />
+              <input
+                class="w-[6.5rem] shrink-0 rounded-(--cxs-radius-md) border border-(--cxs-color-border) bg-(--cxs-color-surface) px-2.5 py-2 text-[0.85rem] text-(--cxs-color-on-surface) transition focus:border-(--cxs-color-focus) focus:outline-none focus:ring-2 focus:ring-(--cxs-color-focus)"
+                type="time"
+                [attr.aria-label]="editDraft.kind === 'task' ? 'Due time' : 'Reminder time'"
+                [(ngModel)]="editDraft.startTime"
+              />
+            </div>
+          </div>
+        }
+
         <!-- Error -->
         @if (error()) {
           <p class="text-[0.85rem] text-red-500" role="alert">{{ error() }}</p>
@@ -351,14 +374,12 @@
 
         <!-- Actions -->
         <div class="flex justify-between gap-2">
-          <cxs-button color="danger" variant="ghost" (click)="deleteItem()">Delete</cxs-button>
+          <cxs-button color="danger" variant="ghost" [disabled]="isLoading()" (click)="deleteItem()">Delete</cxs-button>
           <div class="flex gap-2">
             <cxs-button variant="ghost" (click)="isItemDetailOpen = false">Cancel</cxs-button>
-            @if (editDraft.eventId) {
-              <cxs-button variant="primary" [disabled]="isLoading()" (click)="saveEdit()">
-                {{ isLoading() ? 'Saving…' : 'Save' }}
-              </cxs-button>
-            }
+            <cxs-button variant="primary" [disabled]="isLoading()" (click)="saveEdit()">
+              {{ isLoading() ? 'Saving…' : 'Save' }}
+            </cxs-button>
           </div>
         </div>
       </div>

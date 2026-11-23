@@ -38,9 +38,12 @@ type CalendarDay = {
   items: CalendarItem[];
 }
 
+type EditableItemKind = 'event' | 'task' | 'reminder';
+
 type EditDraft = {
   itemId: string;
-  eventId: number | null;
+  kind: EditableItemKind | null;
+  recordId: number | null;
   title: string;
   type: string;
   calendarId: number;
@@ -207,12 +210,14 @@ export class CalendarComponent implements OnInit {
   openItem(event: Event, item: CalendarItem): void {
     event.stopPropagation();
     this.selectedItem.set(item);
-    const eventId = item.id.startsWith('event-') ? parseInt(item.id.split('-')[1], 10) : null;
+    this.error.set(null);
+    const { kind, recordId } = this.parseItemReference(item.id);
     const startDate = this.formatDateToYYYYMMDD(item.start);
     const endDate = this.formatDateToYYYYMMDD(item.end ?? item.start);
     this.editDraft = {
       itemId: item.id,
-      eventId,
+      kind,
+      recordId,
       title: item.title,
       type: item.type,
       calendarId: item.calendarId ?? this.primaryCalendarId() ?? 0,
@@ -226,61 +231,191 @@ export class CalendarComponent implements OnInit {
   }
 
   saveEdit(): void {
-    if (!this.editDraft || !this.editDraft.eventId) {
+    const draft = this.editDraft;
+    if (!draft) {
       return;
     }
-    const startDate = this.parseDateString(this.editDraft.startDate);
-    const endDate = this.parseDateString(this.editDraft.endDate);
+    if (draft.recordId === null) {
+      this.error.set('This item cannot be edited from the calendar');
+      return;
+    }
+    switch (draft.kind) {
+      case 'event':
+        this.saveEvent(draft, draft.recordId);
+        return;
+      case 'task':
+        this.saveTask(draft, draft.recordId);
+        return;
+      case 'reminder':
+        this.saveReminder(draft, draft.recordId);
+        return;
+      default:
+        this.error.set('This item cannot be edited from the calendar');
+    }
+  }
+
+  deleteItem(): void {
+    const draft = this.editDraft;
+    if (!draft) {
+      return;
+    }
+    if (draft.recordId === null) {
+      this.error.set('This item cannot be deleted from the calendar');
+      return;
+    }
+    switch (draft.kind) {
+      case 'event':
+        this.deleteEvent(draft.recordId);
+        return;
+      case 'task':
+        this.deleteTask(draft.recordId, draft.itemId);
+        return;
+      case 'reminder':
+        this.deleteReminder(draft.recordId, draft.itemId);
+        return;
+      default:
+        this.error.set('This item cannot be deleted from the calendar');
+    }
+  }
+
+  private saveEvent(draft: EditDraft, eventId: number): void {
+    const startDate = this.parseDateString(draft.startDate);
+    const endDate = this.parseDateString(draft.endDate);
     if (endDate < startDate) {
       this.error.set('End date must be on or after the start date');
       return;
     }
-    const start = this.combineDateAndTime(startDate, this.editDraft.startTime);
-    const end = this.combineDateAndTime(endDate, this.editDraft.endTime);
+    const start = this.combineDateAndTime(startDate, draft.startTime);
+    const end = this.combineDateAndTime(endDate, draft.endTime);
     const dto: UpdateEventDto = {
-      title: this.editDraft.title.trim(),
+      title: draft.title.trim(),
       startTime: start.toISOString(),
       endTime: end.toISOString()
     };
     this.isLoading.set(true);
-    this.eventService.updateEvent(this.editDraft.eventId, dto).subscribe({
+    this.eventService.updateEvent(eventId, dto).subscribe({
       next: (updated) => {
         // Remove all items for this event (including recurring expansions), then re-expand
-        const baseId = `event-${updated.id}`;
         this.items.update((current) => [
-          ...current.filter((i) => !i.id.startsWith(baseId)),
+          ...current.filter((i) => !this.isEventItem(i.id, updated.id)),
           ...this.expandRecurring(updated, this.getVisibleRange())
         ]);
-        this.isItemDetailOpen = false;
-        this.isLoading.set(false);
-        this.error.set(null);
+        this.finishDialogAction();
       },
-      error: (err: unknown) => {
-        this.error.set(err instanceof Error ? err.message : 'Failed to update event');
-        this.isLoading.set(false);
-      }
+      error: (err: unknown) => this.failDialogAction(err, 'Failed to update event')
     });
   }
 
-  deleteItem(): void {
-    if (!this.editDraft?.eventId) {
-      this.isItemDetailOpen = false;
+  private saveTask(draft: EditDraft, taskId: number): void {
+    const dueDate = this.validateSingleDateDraft(draft);
+    if (!dueDate) {
       return;
     }
-    const eventId = this.editDraft.eventId;
-    const baseId = `event-${eventId}`;
+    this.isLoading.set(true);
+    this.taskService.updateTask(taskId, {
+      title: draft.title.trim(),
+      dueDate: dueDate.toISOString()
+    }).subscribe({
+      next: (updated) => {
+        this.replaceItem(draft.itemId, this.mapTaskToCalendarItem(updated));
+        this.finishDialogAction();
+      },
+      error: (err: unknown) => this.failDialogAction(err, 'Failed to update task')
+    });
+  }
+
+  private saveReminder(draft: EditDraft, reminderId: number): void {
+    const remindAt = this.validateSingleDateDraft(draft);
+    if (!remindAt) {
+      return;
+    }
+    this.isLoading.set(true);
+    this.reminderService.updateReminder(reminderId, {
+      title: draft.title.trim(),
+      reminderDateTime: remindAt.toISOString()
+    }).subscribe({
+      next: (updated) => {
+        // A reminder's calendar comes from its parent event, which this dialog cannot change.
+        this.replaceItem(draft.itemId, this.mapReminderToCalendarItem(updated, draft.calendarId));
+        this.finishDialogAction();
+      },
+      error: (err: unknown) => this.failDialogAction(err, 'Failed to update reminder')
+    });
+  }
+
+  private deleteEvent(eventId: number): void {
     this.isLoading.set(true);
     this.eventService.deleteEvent(eventId).subscribe({
       next: () => {
-        this.items.update((current) => current.filter((i) => !i.id.startsWith(baseId)));
-        this.isItemDetailOpen = false;
-        this.isLoading.set(false);
+        this.items.update((current) => current.filter((i) => !this.isEventItem(i.id, eventId)));
+        this.finishDialogAction();
       },
-      error: (err: unknown) => {
-        this.error.set(err instanceof Error ? err.message : 'Failed to delete event');
-        this.isLoading.set(false);
-      }
+      error: (err: unknown) => this.failDialogAction(err, 'Failed to delete event')
     });
+  }
+
+  private deleteTask(taskId: number, itemId: string): void {
+    this.isLoading.set(true);
+    this.taskService.deleteTask(taskId).subscribe({
+      next: () => {
+        this.items.update((current) => current.filter((i) => i.id !== itemId));
+        this.finishDialogAction();
+      },
+      error: (err: unknown) => this.failDialogAction(err, 'Failed to delete task')
+    });
+  }
+
+  private deleteReminder(reminderId: number, itemId: string): void {
+    this.isLoading.set(true);
+    this.reminderService.deleteReminder(reminderId).subscribe({
+      next: () => {
+        this.items.update((current) => current.filter((i) => i.id !== itemId));
+        this.finishDialogAction();
+      },
+      error: (err: unknown) => this.failDialogAction(err, 'Failed to delete reminder')
+    });
+  }
+
+  /** Validates a task/reminder draft and returns its combined date/time, or null after setting an error. */
+  private validateSingleDateDraft(draft: EditDraft): Date | null {
+    if (!draft.title.trim()) {
+      this.error.set('Title is required');
+      return null;
+    }
+    if (!draft.startDate) {
+      this.error.set('Date is required');
+      return null;
+    }
+    return this.combineDateAndTime(this.parseDateString(draft.startDate), draft.startTime || '00:00');
+  }
+
+  private replaceItem(itemId: string, replacement: CalendarItem): void {
+    this.items.update((current) => current.map((i) => (i.id === itemId ? replacement : i)));
+  }
+
+  private finishDialogAction(): void {
+    this.isItemDetailOpen = false;
+    this.isLoading.set(false);
+    this.error.set(null);
+  }
+
+  private failDialogAction(err: unknown, fallback: string): void {
+    this.error.set(err instanceof Error ? err.message : fallback);
+    this.isLoading.set(false);
+  }
+
+  /** Matches an event item id, including recurring occurrences (`event-<id>-<iso>`), without matching other ids sharing a numeric prefix. */
+  private isEventItem(itemId: string, eventId: number): boolean {
+    const baseId = `event-${eventId}`;
+    return itemId === baseId || itemId.startsWith(`${baseId}-`);
+  }
+
+  private parseItemReference(itemId: string): { kind: EditableItemKind | null; recordId: number | null } {
+    const match = /^(event|task|reminder)-(\d+)(?:-|$)/.exec(itemId);
+    if (!match) {
+      return { kind: null, recordId: null };
+    }
+    return { kind: match[1] as EditableItemKind, recordId: Number.parseInt(match[2], 10) };
   }
 
   itemsForDate(date: Date): CalendarItem[] {
